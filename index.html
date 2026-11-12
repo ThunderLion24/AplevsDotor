@@ -212,7 +212,8 @@
   .card p { color: var(--muted); font-size: 14px; line-height: 1.45; }
   .diffs { display: flex; gap: 8px; margin: 14px 0 6px; flex-wrap: wrap; }
   .diffs button { flex: 1; min-width: 130px; padding: 10px; border-top: 4px solid var(--lvl, #6b4a33); border-radius: 10px; }
-  .card .secret { margin-top: 8px; background: linear-gradient(180deg, #8e2b2b, #5e1a1a); border-color: #c0392b; }
+  .card .bigbtn.secret { margin-top: 8px; background: linear-gradient(180deg, #b03a3a, #7a1f1f); border-color: #e05a4a; }
+  .card .bigbtn.secret:hover { background: linear-gradient(180deg, #c84a4a, #8e2b2b); }
   #shop .shopbtn.locked .portrait { filter: grayscale(1) brightness(.6); }
   .diffs button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.1); }
   .diffs button[data-diff="super"] { --lvl: #74b9ff; }
@@ -225,7 +226,8 @@
   .card { max-height: calc(100vh - 32px); overflow-y: auto; }
   .card.wide { max-width: 760px; }
   .card h3.mh { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 12px 0 6px; text-align: left; }
-  .maps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .maps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  @media (max-width: 860px) { .maps { grid-template-columns: repeat(3, 1fr); } }
   .mapbtn { padding: 5px; border-radius: 10px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
   .mapbtn canvas { width: 100%; height: auto; border-radius: 5px; display: block; }
   .mapbtn .mname { font-weight: bold; font-size: 13px; }
@@ -288,7 +290,7 @@
     </div>
     <h2>Selected</h2>
     <div id="info">Click a kid on the map to upgrade, sell, or change targeting.</div>
-    <h2>Doctors spotted</h2>
+    <h2 id="legendtitle">Doctors spotted</h2>
     <div id="legend"></div>
   </aside>
 </div>
@@ -318,7 +320,9 @@ const SPEED_RATE = [1, 0.85, 0.7, 0.56, 0.42, 0.3];       // path 1: throw faste
 const RANGE_MULT = [1, 1.15, 1.3, 1.5, 1.75, 2.05];       // path 2: reach farther
 const RANGE_DMG = [1, 1, 1.1, 1.2, 1.35, 1.5];            //          (plus a little extra punch)
 const ORCHARD_INCOME = [45, 75, 110, 160, 230, 320];      // orchard path 0
-const PEP_BONUS = [0, 0.05, 0.1, 0.15, 0.22, 0.3];        // orchard path 2
+const PEP_BONUS = [0, 0.05, 0.1, 0.15, 0.22, 0.3];        // orchard path 2: nearby kids hit harder
+const ORCHARD_LIVES = [0, 1, 2, 3, 5, 8];                 // orchard path 2: + lives every round
+const ORCHARD_CASH = [0, 20, 40, 70, 110, 160];           // orchard path 2: + $ every round
 const PEP_RADIUS = 130;
 const SNIPER_CRIT = [0, 0.1, 0.18, 0.27, 0.38, 0.5];      // sniper path 2: chance of a x3 critical hit
 const SNIPER_CRIT_MULT = 3;
@@ -357,7 +361,7 @@ const PATH_HINTS = {
   juggler: ['Hits harder', 'Juggles faster', 'More range + 1 more apple per tier'],
   juice:   ['Nearby kids attack faster', 'Nearby kids reach farther', 'Wider juice zone'],
   sling:   ['Hits harder', 'Reloads faster', 'Critical hits (x3 damage)'],
-  orchard: ['More $ per round', '+10% round bonus per tier', 'Nearby kids hit harder (tier 5: they see camo)'],
+  orchard: ['More $ per round', '+10% round bonus per tier', '+lives and +$ every round, nearby hit harder (tier 5: see camo)'],
 };
 const SELL_RATE = 0.7;
 
@@ -391,7 +395,7 @@ const TOWERS = {
   caramel: { name: 'Caramel Kid',   cost: 180, range: 115, dmg: 3,  rate: 1.0,  speed: 430, shirt: '#a0522d', hair: '#3b2412', key: '5', slow: 0.45, slowDur: 2.0,
              desc: 'Sticky caramel apples slow doctors down (bosses resist half).' },
   orchard: { name: 'Orchard Kid',   cost: 450, range: 0,   dmg: 0,  rate: 0,    speed: 0,   shirt: '#8e44ad', hair: '#c0392b', key: '6', income: true,
-             desc: 'Doesn\'t throw. Picks apples for +$ at the end of every round.' },
+             desc: 'Doesn\'t throw. Picks apples for +$ at the end of every round. Pep Talk also brings back lives and extra $ every round.' },
   bouncer: { name: 'Bouncy Kid',    cost: 240, range: 110, dmg: 7,  rate: 0.9,  speed: 480, shirt: '#ff6b81', hair: '#2d1b0e', key: '7', bounces: 2,
              desc: 'Rubbery crab apples ricochet to nearby doctors. Each bounce hits 15% softer.' },
   rotten:  { name: 'Rotten Kid',    cost: 280, range: 110, dmg: 2,  rate: 1.1,  speed: 400, shirt: '#6a8a3a', hair: '#4a3b2a', key: '8', poison: 6, poisonDur: 3,
@@ -455,6 +459,36 @@ const ENEMIES = {
   hospital:  { name: 'The Hospital',     intro: 100, hp: 40000, speed: 18, armor: 16, reward: 5000, leak: 99999, r: 36, coat: '#ecf0f1', scrub: '#e74c3c', bossOnly: true,
                desc: 'FINAL BOSS. The building itself. Discharges doctors constantly and calls in the executives at half health. If it reaches the orchard, it\'s over.' },
 };
+// Kids (attackers in the secret Hospital Defense mode). They walk from the orchard to the hospital.
+// coat/scrub are the shirt/hair colors, so the legend dots work like the doctors'.
+const FOES = {
+  k_kid:     { name: 'Apple Kid',           intro: 1,  hp: 22,    speed: 62,  armor: 0,  reward: 4,    leak: 1,  r: 10, coat: '#e74c3c', scrub: '#6b3e1e',
+               desc: 'Just a kid with an apple. Weak but eager.' },
+  k_speedy:  { name: 'Speedy Kid',          intro: 5,  hp: 45,    speed: 84,  armor: 0,  reward: 6,    leak: 2,  r: 10, coat: '#f39c12', scrub: '#f1c40f',
+               desc: 'Runs everywhere. Not tough, but fast.' },
+  k_basket:  { name: 'Basket Kid',          intro: 10, hp: 130,   speed: 64,  armor: 1,  reward: 9,    leak: 3,  r: 12, coat: '#27ae60', scrub: '#8e5a2b',
+               desc: 'Hides behind a basket of apples. Light armor.' },
+  k_bouncy:  { name: 'Bouncy Kid',          intro: 15, hp: 240,   speed: 72,  armor: 3,  reward: 14,   leak: 4,  r: 12, coat: '#ff6b81', scrub: '#2d1b0e',
+               desc: 'Armored with a bike helmet and knee pads.' },
+  k_juice:   { name: 'Juice Box Kid',       intro: 25, hp: 300,   speed: 70,  armor: 2,  reward: 18,   leak: 4,  r: 12, coat: '#00b894', scrub: '#6c5ce7',
+               desc: 'Shares juice with nearby kids every few seconds, healing them.' },
+  k_hider:   { name: 'Hide-and-Seek Champ', intro: 35, hp: 500,   speed: 70,  armor: 3,  reward: 25,   leak: 6,  r: 12, coat: '#556b2f', scrub: '#3b4a1f', camo: true,
+               desc: 'CAMO. Doctors can only target it with Camo Goggles.' },
+  k_big:     { name: 'Big Kid',             intro: 30, hp: 800,   speed: 52,  armor: 5,  reward: 35,   leak: 8,  r: 15, coat: '#8e44ad', scrub: '#c0392b',
+               desc: 'The biggest kid in class. Heavily armored. Boss at round 20.' },
+  k_skater:  { name: 'Skateboard Kid',      intro: 45, hp: 900,   speed: 104, armor: 4,  reward: 30,   leak: 8,  r: 12, coat: '#0984e3', scrub: '#2d3436',
+               desc: 'Very fast on four wheels.' },
+  k_coach:   { name: 'Gym Coach',           intro: 40, hp: 9000,  speed: 32,  armor: 9,  reward: 600,  leak: 60, r: 22, coat: '#d63031', scrub: '#dfe6e9', bossOnly: true,
+               desc: 'BOSS. Blows the whistle: nearby kids run faster, and more Apple Kids join in.' },
+  k_principal: { name: 'The Principal',     intro: 50, hp: 30000, speed: 22,  armor: 12, reward: 3000, leak: 99999, r: 26, coat: '#2d3436', scrub: '#b2bec3', bossOnly: true,
+               desc: 'FINAL BOSS. Calls in Big Kids as it marches. If it reaches the hospital, it\'s over.' },
+};
+for (const k in FOES) ENEMIES[k] = { ...FOES[k], foe: true };
+const FOE_REGULARS = ['k_kid', 'k_speedy', 'k_basket', 'k_bouncy', 'k_juice', 'k_big', 'k_hider', 'k_skater'];
+const DEFEND_WIN = 50;
+const winRound = () => (state && state.defend ? DEFEND_WIN : WIN_ROUND);
+// Does this attacker belong to the mode being played?
+const inMode = e => !!e.foe === !!(state && state.defend);
 const REGULARS = ['student', 'intern', 'junior', 'senior', 'chief', 'nurse', 'physician', 'warmedic', 'paramedic', 'anesth', 'surgeon', 'radiologist', 'neuro'];
 const camoCost = t => Math.round(Math.max(100, Math.round(TOWERS[t.type].cost * 0.5)) * costMult());
 const regIntro = k => ENEMIES[k].regularFrom || ENEMIES[k].intro;
@@ -465,6 +499,12 @@ function hpMult(r) { return (1 + (r - 1) * 0.03 + (r - 1) * (r - 1) * 0.00025) *
 
 function bossesFor(r) {
   const b = [];
+  if (state && state.defend) {
+    if (r === 20) b.push('k_big');
+    if (r === DEFEND_WIN) { b.push('k_principal'); return b; }
+    if (r >= 40 && r % 10 === 0) b.push('k_coach');
+    return b;
+  }
   if (r === 20) b.push('chief');
   if (r === 100 || (r > 100 && r % 50 === 0)) { b.push('hospital'); return b; }
   if (r >= 40 && r % 10 === 0) b.push('head');
@@ -488,10 +528,20 @@ const MAPS = [
     paths: [
       [[-1,13],[3,13],[3,1],[8,1],[8,13],[13,13],[13,1],[18,1],[18,13],[20.5,13]],
     ] },
+  { id: 'spiral', name: 'Snail Shell', level: 'Easy',
+    desc: 'The path spirals inward to an orchard in the very middle of the field.',
+    paths: [
+      [[-1,1],[18,1],[18,13],[1,13],[1,4],[15,4],[15,10],[4,10],[4,7],[10,7]],
+    ] },
   { id: 'classic', name: 'Orchard Lane', level: 'Normal',
     desc: 'The original lane. One path with plenty of bends.',
     paths: [
       [[-1,2],[5,2],[5,7],[2,7],[2,12],[9,12],[9,4],[13,4],[13,10],[17,10],[17,2],[20.5,2]],
+    ] },
+  { id: 'cross', name: 'Crossroads', level: 'Normal',
+    desc: 'One path that crosses itself twice. Kids near a crossing get two shots at every doctor.',
+    paths: [
+      [[-1,4],[16,4],[16,11],[8,11],[8,1],[3,1],[3,13],[20.5,13]],
     ] },
   { id: 'twin', name: 'Twin Gates', level: 'Medium',
     desc: 'Two hospitals. Their paths merge before the orchard.',
@@ -505,6 +555,19 @@ const MAPS = [
       [[-1,7],[4,7],[4,3],[9,3],[9,7],[14,7],[20.5,7]],
       [[17,-1],[17,4],[12,4],[12,7],[14,7],[20.5,7]],
       [[2,15],[2,10],[11,10],[11,13],[16,13],[16,7],[20.5,7]],
+    ] },
+  { id: 'crossfire', name: 'Crossfire', level: 'Hard',
+    desc: 'Two hospitals, two orchard gates, and the paths cut straight across each other.',
+    paths: [
+      [[-1,2],[10,2],[10,12],[20.5,12]],
+      [[-1,12],[4,12],[4,7],[16,7],[16,2],[20.5,2]],
+    ] },
+  { id: 'speedway', name: 'Speedway', level: 'Insane',
+    desc: 'Three straight sprints from one side of the field to the other. No bends, no mercy.',
+    paths: [
+      [[-1,2],[20.5,2]],
+      [[-1,7],[20.5,7]],
+      [[-1,12],[20.5,12]],
     ] },
   { id: 'four', name: 'Four Corners', level: 'Insane',
     desc: 'Four hospitals, four short paths, and the orchard is right in the middle.',
@@ -625,6 +688,7 @@ let mouse = { x: -100, y: -100, in: false };
 
 function newGame(diffKey, mapId = menuMap) {
   const d = DIFFS[diffKey];
+  applySkin(false);
   CUR = mapData(mapId);
   const bg = bgCanvas.getContext('2d');
   bg.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -634,7 +698,7 @@ function newGame(diffKey, mapId = menuMap) {
     towers: [], enemies: [], projs: [], parts: [], texts: [], queue: [], pending: [], traps: [], bees: [], shake: 0,
     spawnT: 0, inWave: false, speed: 1, auto: $('chkAuto').checked, autoT: 0,
     selected: null, placing: null, over: false, won: false, paused: false, menu: false,
-    seen: new Set(), reverse: false,
+    seen: new Set(), reverse: false, defend: false, shaken: null,
   };
   buildShop();
   refreshLegend();
@@ -655,7 +719,7 @@ function shuffle(a) {
   return a;
 }
 function buildWave(r) {
-  const pool = REGULARS.filter(k => regIntro(k) <= r);
+  const pool = (state.defend ? FOE_REGULARS : REGULARS).filter(k => regIntro(k) <= r);
   let budget = 120 + 40 * Math.pow(r, 1.45);
   const list = [];
   const newcomers = pool.filter(k => regIntro(k) === r);
@@ -697,19 +761,26 @@ function announceRound(r) {
   const lines = [];
   for (const k in ENEMIES) {
     const e = ENEMIES[k];
-    if (e.intro === r && k !== 'chief' && k !== 'hospital') lines.push(`<div class="new">NEW: ${e.name}${e.bossOnly ? ' (BOSS)' : ''}</div>`);
+    if (e.intro === r && inMode(e) && k !== 'chief' && k !== 'hospital' && k !== 'k_principal') lines.push(`<div class="new">NEW: ${e.name}${e.bossOnly ? ' (BOSS)' : ''}</div>`);
   }
+  if (state.defend) {
+    if (r === 20) lines.push(`<div class="new">BOSS: a really Big Kid!</div>`);
+    if (r === 35) lines.push(`<div>Hide-and-Seek Champs are camouflaged: give doctors Camo Goggles to see them!</div>`);
+    if (r === DEFEND_WIN) lines.push(`<div class="new">FINAL BOSS: The Principal is coming!</div>`);
+  }
+  else {
   if (r === 20) lines.push(`<div class="new">BOSS: Chief Resident!</div>`);
   if (r === 100) lines.push(`<div class="new">FINAL BOSS: the Hospital itself is coming!</div>`);
-  if (r === 35) lines.push(`<div>War Medics are camouflaged: give kids Camo Goggles to see them!</div>`);
-  if (r === 30) lines.push(`<div class="new">Chief Residents now attack as regular doctors!</div>`);
-  if (r === 55) lines.push(`<div>Anesthesiologists put kids to sleep. Spread your kids out!</div>`);
-  if (r === 70) lines.push(`<div>Radiologists can't be slowed, frozen or shoved. Bring raw damage!</div>`);
+  }
+  if (!state.defend && r === 35) lines.push(`<div>War Medics are camouflaged: give kids Camo Goggles to see them!</div>`);
+  if (!state.defend && r === 30) lines.push(`<div class="new">Chief Residents now attack as regular doctors!</div>`);
+  if (!state.defend && r === 55) lines.push(`<div>Anesthesiologists put kids to sleep. Spread your kids out!</div>`);
+  if (!state.defend && r === 70) lines.push(`<div>Radiologists can't be slowed, frozen or shoved. Bring raw damage!</div>`);
   if (r === DOUBLING_ROUND + 1) lines.push(`<div class="new">From now on, doctors are twice as tough every round!</div>`);
   if (r > DOUBLING_ROUND) lines.push(`<div>Doctor toughness: x${fmtMult(freeplayMult(r))}</div>`);
   if (r === FIB_SPEED_ROUND + 1) lines.push(`<div class="new">Doctors now speed up every round, following the Fibonacci sequence!</div>`);
   if (r > FIB_SPEED_ROUND) lines.push(`<div>Doctor speed: +${fmtMult(fib(Math.min(r - FIB_SPEED_ROUND, 1400)))}%</div>`);
-  const bosses = bossesFor(r).filter(k => !(k === 'chief' && r === 20) && ENEMIES[k].intro !== r);
+  const bosses = bossesFor(r).filter(k => !(k === 'chief' && r === 20) && !(k === 'k_big' && r === 20) && ENEMIES[k].intro !== r);
   for (const k of bosses) lines.push(`<div>Boss incoming: ${ENEMIES[k].name}</div>`);
   showBanner(`<div class="big">Round ${r}</div>${lines.join('')}`, lines.length ? 3.5 : 1.6);
 }
@@ -726,19 +797,22 @@ function endWave() {
   state.inWave = false;
   state.hospitalAwake = -1;
   const bonus = Math.round((60 + state.round * 4) * state.diff.reward);
-  let income = 0;
+  let income = 0, healed = 0;
   for (const t of state.towers) {
     if (t.type === 'orchard') {
       const st = towerStats(t);
-      const inc = st.income + Math.round(bonus * st.market);
+      const inc = st.income + Math.round(bonus * st.market) + st.cash;
       income += inc;
       addText(t.x, t.y - 22, `+$${inc}`, '#f6c343', 1.4);
+      if (st.heal) { healed += st.heal; addText(t.x, t.y - 38, `+${st.heal} ${st.heal === 1 ? 'life' : 'lives'}`, '#ff9f9f', 1.4); }
     }
   }
   state.money += bonus + income;
+  state.lives += healed;
   saveBest(state.round);
-  showBanner(`<div class="big">Round ${state.round} cleared!</div><div>+$${bonus} bonus${income ? ` &middot; +$${income} from orchards` : ''}</div>`, 2.2);
-  if (state.round >= WIN_ROUND && !state.won) {
+  const from = state.defend ? 'billing' : 'orchards';
+  showBanner(`<div class="big">Round ${state.round} cleared!</div><div>+$${bonus} bonus${income ? ` &middot; +$${income} from ${from}` : ''}${healed ? ` &middot; +${healed} ${healed === 1 ? 'life' : 'lives'}` : ''}</div>`, 2.2);
+  if (state.round >= winRound() && !state.won) {
     state.won = true;
     showOverlay('win');
   }
@@ -772,12 +846,13 @@ function spawnEnemy(key, boss, d0 = 0, summoned = false, route = null) {
 // Five kids of the same type, all at tier 5 in the same path, fuse into one Tier 6 kid.
 // Its stats combine all five, then x1.25. One Tier 6 per path per kid type.
 // The three Tier 6 kids of one type (one per path) fuse into a Tier 7 kid: their stats combined,
-// x2, and it also sees camo, ignores armor and never misses. One Tier 7 per kid type, and it
-// takes up all three Tier 6 spots for that type.
+// x2, and it also sees camo, ignores armor and never misses. It takes up all three Tier 6 spots
+// for that type. Players see Tier 6 as a "Lord" and Tier 7 as the "Champion": only one Champion
+// can be on the field at a time, across every kid type.
 const T6_COUNT = 5, T6_MULT = 1.25, T7_MULT = 2;
 // Added together across the five kids. Attack speed is combined separately (attacks per second add up).
 // Everything else (range, splash, durations, crit chance...) takes the best of the five.
-const T6_SUM = ['dmg', 'poison', 'income', 'market', 'pep', 'bounces', 'maxPies', 'maxBees', 'knock'];
+const T6_SUM = ['dmg', 'poison', 'income', 'market', 'pep', 'heal', 'cash', 'bounces', 'maxPies', 'maxBees', 'knock'];
 function fuseStats(list, mult) {
   const out = {};
   for (const k in list[0]) {
@@ -791,7 +866,7 @@ function fuseStats(list, mult) {
   out.crit = Math.min(1, out.crit);
   out.slow = Math.min(0.9, out.slow);
   out.haste = Math.min(1.5, out.haste);
-  for (const k of ['bounces', 'maxPies', 'maxBees', 'shots']) out[k] = Math.round(out[k]);
+  for (const k of ['bounces', 'maxPies', 'maxBees', 'shots', 'heal', 'cash']) out[k] = Math.round(out[k]);
   return out;
 }
 // Is the Tier 6 spot for this kid type + path taken (by a Tier 6, or by a Tier 7 that holds all three)?
@@ -803,10 +878,10 @@ const fuseCandidates = (t, i) => state.towers
 // null: no fusion on this path. '': ready. Otherwise the reason it can't fuse yet.
 function fuseLock(t, i) {
   if (t.t6 || t.t7 || t.paths[i] < MAX_TIER) return null;
-  if (state.towers.some(o => o.t7 && o.type === t.type)) return `Your Tier 7 ${TOWERS[t.type].name} holds all its Tier 6 spots`;
-  if (t6Taken(t.type, i)) return `You already have a Tier 6 ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name}`;
+  if (state.towers.some(o => o.t7 && o.type === t.type)) return `Your ${TOWERS[t.type].name} Champion holds all its Lord spots`;
+  if (t6Taken(t.type, i)) return `You already have a ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name} Lord`;
   const n = fuseCandidates(t, i).length + 1;
-  return n < T6_COUNT ? `Tier 6 needs ${T6_COUNT} tier-5 ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name}s (${n}/${T6_COUNT})` : '';
+  return n < T6_COUNT ? `A Lord needs ${T6_COUNT} tier-5 ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name}s (${n}/${T6_COUNT})` : '';
 }
 function absorb(t, others) {
   for (const o of others) {
@@ -829,19 +904,23 @@ function fuseTower(t, i) {
   burst(t.x, t.y, '#ffe58a', 40, 180);
   stars(t.x, t.y, 36, 200);
   state.shake = Math.max(state.shake, 8);
-  addText(t.x, t.y - 28, 'TIER 6!', '#f6c343', 1.6);
+  addText(t.x, t.y - 28, 'LORD!', '#f6c343', 1.6);
   saveGame();
   refreshUI(true);
 }
 // The other two Tier 6 kids of t's type (the other two paths), if they exist.
 const t7Partners = t => state.towers.filter(o => o !== t && o.t6 && o.type === t.type && o.t6.path !== t.t6.path);
 // null: not a Tier 6. '': ready. Otherwise how far along the set is.
+// The one Champion on the field, if there is one.
+const champion = () => state.towers.find(o => o.t7) || null;
 function t7Lock(t) {
   if (!t.t6) return null;
+  const ch = champion();
+  if (ch) return `Only one Champion allowed. Your ${TOWERS[ch.type].name} already holds the title.`;
   const have = new Set([t.t6.path, ...t7Partners(t).map(o => o.t6.path)]);
   if (have.size === 3) return '';
   const missing = [0, 1, 2].filter(i => !have.has(i)).map(i => PATH_NAMES[t.type][i]).join(' and ');
-  return `Tier 7 needs a Tier 6 ${TOWERS[t.type].name} on all 3 paths (${have.size}/3, missing ${missing})`;
+  return `A Champion needs a ${TOWERS[t.type].name} Lord on all 3 paths (${have.size}/3, missing ${missing})`;
 }
 function fuseT7(t) {
   if (t7Lock(t) !== '') return;
@@ -855,7 +934,7 @@ function fuseT7(t) {
   burst(t.x, t.y, '#ffe58a', 40, 200);
   stars(t.x, t.y, 60, 260);
   state.shake = Math.max(state.shake, 14);
-  addText(t.x, t.y - 30, 'TIER 7!!', '#d6a2ff', 2);
+  addText(t.x, t.y - 30, 'CHAMPION!!', '#d6a2ff', 2);
   saveGame();
   refreshUI(true);
 }
@@ -908,6 +987,8 @@ function towerStats(t) {
     income: def.income ? ORCHARD_INCOME[a] : 0,
     market: def.income ? 0.1 * b : 0,
     pep: def.income ? PEP_BONUS[c] : 0,
+    heal: def.income ? ORCHARD_LIVES[c] : 0,
+    cash: def.income ? ORCHARD_CASH[c] : 0,
     bounces: def.bounces ? def.bounces + c : 0,
     poison: def.poison ? def.poison * POWER_DMG[a] * (1 + (t.pep || 0)) : 0,
     poisonDur: def.poisonDur ? def.poisonDur + 0.5 * c : 0,
@@ -928,8 +1009,8 @@ const pathCost = (t, i) => t.paths[i] >= MAX_TIER ? Infinity
 // Returns '' if path i can be upgraded, otherwise the reason it can't.
 function pathLock(t, i) {
   const p = t.paths;
-  if (t.t7) return 'Tier 7';
-  if (t.t6) return 'Tier 6';
+  if (t.t7) return 'Champion';
+  if (t.t6) return 'Lord';
   if (p[i] >= MAX_TIER) return 'Maxed';
   const others = p.filter((_, j) => j !== i);
   if (p[i] === 0 && others.filter(v => v > 0).length >= 2) return 'Locked: 2 paths already chosen';
@@ -968,7 +1049,7 @@ function makeTower(type, x, y) {
 // "ready to start round N+1". Anything bought during a round gets saved once that round ends.
 const SAVE_KEY = 'appleAttackSave', SAVE_VERSION = 1;
 function saveGame() {
-  if (!state || state.over || state.inWave || state.reverse) return false;
+  if (!state || state.over || state.inWave || state.reverse || state.defend) return false;
   const data = {
     v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId,
     round: state.round, lives: state.lives, money: state.money, rr: state.rr, won: state.won, speed: state.speed,
@@ -1011,7 +1092,12 @@ function restoreGame(d) {
       ? { path: f.path, parts: f.parts.map(pp => [0, 1, 2].map(i => Math.max(0, Math.min(MAX_TIER, (Array.isArray(pp) && pp[i]) | 0)))) } : null;
     if (s.t7 && Array.isArray(s.t7.parts)) {
       const parts = s.t7.parts.map(readT6);
-      if (parts.every(Boolean) && new Set(parts.map(f => f.path)).size === 3 && ![0, 1, 2].some(i => t6Taken(t.type, i))) {
+      const extra = state.towers.some(o => o.t7);
+      if (extra) {
+        // only one Champion allowed: an extra one from an older save comes back as a Lord
+        const f = parts.find(pp => pp && !t6Taken(t.type, pp.path));
+        if (f) t.t6 = f;
+      } else if (parts.every(Boolean) && new Set(parts.map(f => f.path)).size === 3 && ![0, 1, 2].some(i => t6Taken(t.type, i))) {
         const bs = s.t7.boost || {}, cnt = v => Math.max(0, Number.isFinite(v) ? v | 0 : 0);
         t.t7 = { parts, boost: { dmg: cnt(bs.dmg), speed: cnt(bs.speed), range: cnt(bs.range) } };
       }
@@ -1038,6 +1124,7 @@ function updateSaveInfo() {
 function manualSave() {
   if (!state || state.over || state.menu) return;
   if (state.reverse) { showBanner('<div class="big">No saving on a Code Blue shift</div>', 1.6); return; }
+  if (state.defend) { showBanner('<div class="big">No saving in Hospital Defense</div>', 1.6); return; }
   if (state.inWave) {
     showBanner('<div class="big">Round in progress</div><div>The game saves itself when this round ends.</div>', 2);
     return;
@@ -1396,7 +1483,7 @@ function damage(e, dmg, pierce, tower, dot = false) {
     if (state.reverse) state.kidMoney += e.reward; else state.money += e.reward;
     if (tower) tower.kills++;
     addText(e.x, e.y - e.r, `+$${e.reward}`, '#f6c343', 0.9);
-    burst(e.x, e.y, '#e74c3c', e.boss ? 40 : 12, e.boss ? 160 : 90);
+    burst(e.x, e.y, e.def.foe ? '#ffeaa7' : '#e74c3c', e.boss ? 40 : 12, e.boss ? 160 : 90);
     burst(e.x, e.y, '#fff4d6', e.boss ? 20 : 6, 70);
     stars(e.x, e.y, e.boss ? 18 : 5, e.boss ? 170 : 90);
     state.parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.3, max: 0.3, color: 'poof', size: e.r * (e.boss ? 3 : 2) });
@@ -1453,7 +1540,7 @@ function update(dt) {
   // director aura
   for (const e of state.enemies) e.aura = false;
   for (const dct of state.enemies) {
-    if (dct.key !== 'director' || !dct.alive) continue;
+    if ((dct.key !== 'director' && dct.key !== 'k_coach') || !dct.alive) continue;
     for (const e of state.enemies) if (e !== dct && Math.hypot(e.x - dct.x, e.y - dct.y) < 110) e.aura = true;
   }
 
@@ -1487,7 +1574,7 @@ function update(dt) {
     e.abilT -= dt;
     if (e.abilT <= 0) {
       switch (e.key) {
-        case 'nurse': {
+        case 'nurse': case 'k_juice': {
           let healed = false;
           for (const o of state.enemies) {
             if (o.alive && o !== e && o.hp < o.maxHp && Math.hypot(o.x - e.x, o.y - e.y) < 90) {
@@ -1507,6 +1594,15 @@ function update(dt) {
         case 'head':
           for (let i = 0; i < 2; i++) spawnEnemy('intern', false, Math.max(0, e.d - 15 - i * 18), true, e.route);
           addText(e.x, e.y - e.r - 8, 'Interns!', '#ffeaa7', 0.9);
+          e.abilT = 6; break;
+        case 'k_coach':
+          for (let i = 0; i < 2; i++) spawnEnemy('k_kid', false, Math.max(0, e.d - 15 - i * 18), true, e.route);
+          addText(e.x, e.y - e.r - 8, 'TWEET!', '#ffeaa7', 0.9);
+          e.abilT = 6; break;
+        case 'k_principal':
+          spawnEnemy('k_big', false, Math.max(0, e.d - 30), true, e.route);
+          for (let i = 0; i < 2; i++) spawnEnemy('k_kid', false, Math.max(0, e.d - 50 - i * 18), true, e.route);
+          addText(e.x, e.y - e.r - 18, 'Detention!', '#ff7675', 1);
           e.abilT = 6; break;
         case 'director':
           for (let i = 0; i < 2; i++) spawnEnemy('nurse', false, Math.max(0, e.d - 15 - i * 18), true, e.route);
@@ -1646,8 +1742,7 @@ function gameOver() {
   state.over = true;
   state.inWave = false;
   saveBest(state.round - 1);
-  clearSave();
-  state.savedRound = null;
+  if (!state.defend) { clearSave(); state.savedRound = null; }
   updateSaveInfo();
   showOverlay('over');
   refreshUI(true);
@@ -1656,7 +1751,7 @@ function gameOver() {
 // ======================= PERSISTENCE =======================
 function getBest() { try { return JSON.parse(localStorage.getItem('appleAttackBest') || '{}'); } catch (e) { return {}; } }
 function saveBest(r) {
-  if (state.diff.sandbox || state.reverse) return;
+  if (state.diff.sandbox || state.reverse || state.defend) return;
   try {
     const b = getBest();
     const k = `${state.mapId}:${state.diffKey}`;
@@ -1803,7 +1898,7 @@ function mapThumb(id) {
   return thumbCache[id];
 }
 
-function drawTree(x, y, s = 1, g = null) {
+function drawTree(x, y, s = 1, g = null, bare = false) {
   const ctx = g || mainCtx;
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
   ctx.beginPath(); ctx.ellipse(x + 4, y + 6, 20 * s, 14 * s, 0, 0, Math.PI * 2); ctx.fill();
@@ -1812,7 +1907,7 @@ function drawTree(x, y, s = 1, g = null) {
   ctx.fillStyle = '#43a047';
   ctx.beginPath(); ctx.arc(x - 5 * s, y - 5 * s, 12 * s, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#e53935';
-  for (const [ax, ay] of [[-8, 4], [6, -9], [9, 6], [-2, -12], [1, 10]]) {
+  if (!bare) for (const [ax, ay] of [[-8, 4], [6, -9], [9, 6], [-2, -12], [1, 10]]) {
     ctx.beginPath(); ctx.arc(x + ax * s, y + ay * s, 2.8 * s, 0, Math.PI * 2); ctx.fill();
   }
 }
@@ -1863,6 +1958,20 @@ function drawKid(x, y, angle, shirt, hair, skin, throwT, scale = 1, holding = '#
   ctx.beginPath(); ctx.arc(1, 0, 7.8, Math.PI * 0.55, Math.PI * 1.45); ctx.closePath(); ctx.fill();
   ctx.beginPath(); ctx.arc(-1, 0, 6.5, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
+}
+
+// Hospital Defense: a doctor standing where a kid would. Uses the doctor art from the enemies.
+function drawDocTower(t) {
+  const sk = DEF_SKIN[t.type], def = ENEMIES[sk ? sk.style : 'intern'], ga = ctx.globalAlpha;
+  drawDoctor({ key: sk ? sk.style : 'intern', def, x: t.x, y: t.y, r: 12, face: t.angle, step: t.throwT > 0 ? 1.2 : 0, skin: t.skin, id: t.id || 0,
+    camo: false, boss: false, aura: false, hitT: 0, slowT: 0, poisonT: 0, frozenT: 0, hp: 1, maxHp: 1, noBar: true });
+  ctx.globalAlpha = ga;
+  if (t.type === 'orchard') {
+    // billing office: a little desk with a stack of bills
+    ctx.fillStyle = '#8e5a2b'; ctx.fillRect(t.x + 6, t.y + 4, 14, 9);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(t.x + 9, t.y + 1, 8, 6);
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(t.x + 10, t.y + 3, 6, 1.5);
+  }
 }
 
 function drawTower(t) {
@@ -1919,7 +2028,8 @@ function drawTower(t) {
     }
     ctx.globalAlpha = ga;
   }
-  if (t.type === 'twins') {
+  if (state && state.defend) drawDocTower(t);
+  else if (t.type === 'twins') {
     const px = Math.cos(t.angle + Math.PI / 2) * 9, py = Math.sin(t.angle + Math.PI / 2) * 9;
     drawKid(t.x - px, t.y - py, t.angle, def.shirt, def.hair, t.skin, t.alt === 1 ? t.throwT : 0, 0.78, '#8bc34a');
     drawKid(t.x + px, t.y + py, t.angle, '#e67e22', def.hair, t.skin, t.alt === 0 ? t.throwT : 0, 0.78, '#8bc34a');
@@ -2173,6 +2283,34 @@ function drawHospitalBoss(e) {
   ctx.fillStyle = '#f6c343'; ctx.fillText('THE HOSPITAL', e.x, by - 5);
 }
 
+// A kid walking the path (Hospital Defense). Drawn in the doctor's rotated frame.
+function drawFoeBody(e) {
+  const r = e.r, def = e.def, sc = r / 12, bob = Math.sin(e.step) * r * 0.08;
+  if (e.key === 'k_skater') {
+    ctx.fillStyle = '#6b3e1e'; ctx.fillRect(-r * 1.1, -r * 0.45, r * 2.2, r * 0.9);
+    ctx.fillStyle = '#2d3436'; for (const [x, y] of [[-0.8, -0.5], [0.8, -0.5], [-0.8, 0.5], [0.8, 0.5]]) { ctx.beginPath(); ctx.arc(x * r, y * r, r * 0.16, 0, 7); ctx.fill(); }
+  }
+  const hold = { k_basket: null, k_juice: null, k_coach: null, k_principal: null, k_skater: null, k_hider: null }[e.key];
+  drawKid(bob, 0, 0, def.coat, def.scrub, e.skin, 0, sc, hold === undefined ? '#e74c3c' : hold);
+  if (e.key === 'k_basket') { ctx.fillStyle = '#a0522d'; ctx.fillRect(r * 0.7, -r * 0.5, r * 0.75, r); ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(r * 1.05, -r * 0.15, r * 0.2, 0, 7); ctx.arc(r * 1.05, r * 0.25, r * 0.2, 0, 7); ctx.fill(); }
+  if (e.key === 'k_juice') { ctx.fillStyle = '#e74c3c'; ctx.fillRect(r * 0.9, r * 0.6, r * 0.45, r * 0.6); ctx.fillStyle = '#ffeaa7'; ctx.fillRect(r * 0.9, r * 0.8, r * 0.45, r * 0.2); }
+  if (e.key === 'k_bouncy') { ctx.strokeStyle = '#2d3436'; ctx.lineWidth = r * 0.15; ctx.beginPath(); ctx.arc(r * 0.08, 0, r * 0.62, 0, 7); ctx.stroke(); }
+  if (e.key === 'k_hider') {
+    ctx.fillStyle = '#3b4a1f';
+    ctx.beginPath(); ctx.arc(-r * 0.3, r * 0.45, r * 0.2, 0, 7); ctx.arc(-r * 0.1, -r * 0.55, r * 0.18, 0, 7); ctx.arc(r * 0.2, r * 0.3, r * 0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2e7d32'; ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.2, r * 0.22, 0, 7); ctx.arc(r * 0.3, -r * 0.35, r * 0.16, 0, 7); ctx.fill();
+  }
+  if (e.key === 'k_coach') {
+    // cap and whistle
+    ctx.fillStyle = '#d63031'; ctx.beginPath(); ctx.arc(r * 0.05, 0, r * 0.5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill(); ctx.fillRect(r * 0.05, -r * 0.3, r * 0.55, r * 0.6);
+    ctx.fillStyle = '#b2bec3'; ctx.beginPath(); ctx.arc(r * 0.75, r * 0.15, r * 0.12, 0, 7); ctx.fill();
+  }
+  if (e.key === 'k_principal') {
+    ctx.fillStyle = '#d63031'; ctx.beginPath(); ctx.moveTo(r * 0.3, -r * 0.08); ctx.lineTo(r * 0.68, 0); ctx.lineTo(r * 0.3, r * 0.08); ctx.fill();
+    ctx.fillStyle = '#2d3436'; ctx.fillRect(r * 0.55, r * 0.6, r * 0.5, r * 0.4);
+  }
+}
+
 function drawDoctor(e) {
   if (e.key === 'hospital') { drawHospitalBoss(e); return; }
   const r = e.r, def = e.def;
@@ -2190,11 +2328,13 @@ function drawDoctor(e) {
     ctx.strokeStyle = 'rgba(255,118,117,0.6)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI * 2); ctx.stroke();
   }
-  if (e.key === 'director') {
+  if (e.key === 'director' || e.key === 'k_coach') {
     ctx.fillStyle = 'rgba(255,118,117,0.08)';
     ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI * 2); ctx.fill();
   }
   ctx.rotate(e.face);
+  if (def.foe) drawFoeBody(e);
+  else {
   const sw = Math.sin(e.step) * r * 0.25;
   // feet
   ctx.fillStyle = '#2d3436';
@@ -2280,6 +2420,7 @@ function drawDoctor(e) {
     ctx.fillStyle = hairCol;
     ctx.beginPath(); ctx.arc(r * 0.05, 0, r * 0.5, Math.PI * 0.6, Math.PI * 1.4); ctx.closePath(); ctx.fill();
   }
+  }
   if (e.hitT > 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.beginPath(); ctx.ellipse(0, 0, r * 0.75, r * 1.05, 0, 0, Math.PI * 2); ctx.fill();
@@ -2320,7 +2461,34 @@ function drawDoctor(e) {
 }
 
 const TRAIL_RGB = { kid: '231,76,60', twins: '139,195,74', caramel: '185,119,14', rotten: '125,107,58', bouncer: '255,159,67', juggler: '246,195,67' };
+function drawMed(p) {
+  ctx.save(); ctx.translate(p.x, p.y);
+  switch (p.type) {
+    case 'kid':  // hot coffee
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 4.4, 0, 7); ctx.fill();
+      ctx.fillStyle = '#6d4c41'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, 7); ctx.fill();
+      break;
+    case 'basket': {  // first-aid kit
+      const prog = 1 - Math.min(1, Math.hypot(p.tx - p.x, p.ty - p.y) / p.total), sc = 1 + 0.6 * Math.sin(Math.PI * prog);
+      ctx.scale(sc, sc); ctx.rotate(p.spin * 0.3);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-6, -5, 12, 10); ctx.strokeStyle = '#b2bec3'; ctx.lineWidth = 1; ctx.strokeRect(-6, -5, 12, 10);
+      ctx.fillStyle = '#e74c3c'; ctx.fillRect(-1.2, -3.5, 2.4, 7); ctx.fillRect(-3.5, -1.2, 7, 2.4);
+      break;
+    }
+    case 'caramel':  // sleepy-time needle
+      ctx.rotate(Math.atan2(p.ty - p.y, p.tx - p.x));
+      ctx.fillStyle = '#dfe6e9'; ctx.fillRect(-5, -1.5, 7, 3); ctx.fillStyle = '#a29bfe'; ctx.fillRect(-4, -1, 4, 2);
+      ctx.strokeStyle = '#636e72'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(6, 0); ctx.stroke();
+      break;
+    default:  // a pill
+      ctx.rotate(p.spin);
+      ctx.fillStyle = '#e84393'; ctx.beginPath(); ctx.ellipse(-1.6, 0, 2.4, 2.2, 0, Math.PI / 2, Math.PI * 1.5); ctx.fill(); ctx.fillRect(-1.6, -2.2, 1.6, 4.4);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(1.6, 0, 2.4, 2.2, 0, -Math.PI / 2, Math.PI / 2); ctx.fill(); ctx.fillRect(0, -2.2, 1.6, 4.4);
+  }
+  ctx.restore();
+}
 function drawProj(p) {
+  if (state && state.defend) { drawMed(p); return; }
   if (p.trail && TRAIL_RGB[p.type]) {
     for (let i = 0; i < p.trail.length; i += 2) {
       const a = (i + 2) / p.trail.length;
@@ -2409,9 +2577,10 @@ function drawStream(t) {
   const now = performance.now() / 1000, mx = (sx + e.x) / 2 + Math.sin(now * 20) * 3, my = (sy + e.y) / 2 - 14;
   const w = 2.5 + (t.ramp || 1) * 1.2;
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(230,126,34,0.45)'; ctx.lineWidth = w + 3;
+  const xray = state.defend;  // Hospital Defense: the Radiologist's beam is an X-ray, not cider
+  ctx.strokeStyle = xray ? 'rgba(116,185,255,0.45)' : 'rgba(230,126,34,0.45)'; ctx.lineWidth = w + 3;
   ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx, my, e.x, e.y); ctx.stroke();
-  ctx.strokeStyle = 'rgba(248,196,113,0.95)'; ctx.lineWidth = w;
+  ctx.strokeStyle = xray ? 'rgba(223,246,255,0.95)' : 'rgba(248,196,113,0.95)'; ctx.lineWidth = w;
   ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx, my, e.x, e.y); ctx.stroke();
   ctx.fillStyle = 'rgba(255,240,200,0.9)';
   for (let i = 0; i < 4; i++) {
@@ -2420,7 +2589,7 @@ function drawStream(t) {
     ctx.beginPath(); ctx.arc(x, y, 1.6, 0, 7); ctx.fill();
   }
   // splash at the doctor grows with the ramp-up
-  ctx.fillStyle = `rgba(245,176,65,${0.25 + 0.1 * (t.ramp || 1)})`;
+  ctx.fillStyle = xray ? `rgba(116,185,255,${0.25 + 0.1 * (t.ramp || 1)})` : `rgba(245,176,65,${0.25 + 0.1 * (t.ramp || 1)})`;
   ctx.beginPath(); ctx.arc(e.x, e.y, 5 + (t.ramp || 1) * 2, 0, 7); ctx.fill();
 }
 function drawBee(b) {
@@ -2448,7 +2617,7 @@ function render() {
   ctx.drawImage(bgCanvas, 0, 0, W, H);
   if (!state) { ctx.restore(); return; }
 
-  for (const tr of CUR.trees) drawTree(tr.x, tr.y);
+  CUR.trees.forEach((tr, i) => drawTree(tr.x, tr.y, 1, null, !!(state.shaken && state.shaken.has(i))));
 
   const sel = state.selected;
   if (sel && sel.type === 'orchard' && sel.paths[2]) {
@@ -2565,15 +2734,16 @@ const shopEl = $('shop');
 let shopMode = null;
 // The bottom bar sells kids normally, and doctors on a Code Blue shift.
 function buildShop() {
-  const mode = state && state.reverse ? 'docs' : 'kids';
+  const mode = state && state.reverse ? 'docs' : state && state.defend ? 'defend' : 'kids';
   if (mode === shopMode) return;
   shopMode = mode;
   shopEl.innerHTML = '';
-  $('shoptitle').textContent = mode === 'docs' ? 'Doctors (send them!)' : 'Kids (towers)';
+  $('shoptitle').textContent = mode === 'docs' ? 'Doctors (send them!)' : mode === 'defend' ? 'Doctors (defenders)' : 'Kids (towers)';
   $('shopdesc').textContent = mode === 'docs' ? 'Click a doctor (or press its key) to send it from the glowing hospital. Click a hospital or press L to switch lanes.'
+    : mode === 'defend' ? 'Pick a doctor, then click the grass to place. Right-click or Esc cancels.'
     : 'Pick a kid, then click the grass to place. Right-click or Esc cancels.';
   const items = mode === 'docs' ? REV_DOCS.map((k, i) => [k, ENEMIES[k].name, REV_COST[k], REV_KEYS[i], ENEMIES[k].scrub, ENEMIES[k].desc])
-    : Object.keys(TOWERS).map(k => [k, TOWERS[k].name, TOWERS[k].cost, TOWERS[k].key, TOWERS[k].shirt, TOWERS[k].desc]);
+    : (mode === 'defend' ? DEF_TYPES : Object.keys(TOWERS)).map(k => [k, TOWERS[k].name, TOWERS[k].cost, TOWERS[k].key, TOWERS[k].shirt, TOWERS[k].desc]);
   for (const [k, name, cost, key, color, desc] of items) {
     const b = document.createElement('button');
     b.className = 'shopbtn'; b.dataset.type = k; b.title = name;
@@ -2590,6 +2760,7 @@ function buildShop() {
 
 function selectPlacing(k) {
   if (!state || state.over || state.menu || state.reverse) return;
+  if (state.defend && !DEF_TYPES.includes(k)) return;
   state.placing = state.placing === k ? null : k;
   state.selected = null;
   if (state.placing) $('shopdesc').textContent = TOWERS[k].desc;
@@ -2600,7 +2771,7 @@ let lastInfoKey = '';
 function refreshUI(force) {
   if (!state) return;
   if (state.reverse) { refreshShiftUI(force); return; }
-  $('lRound').textContent = 'Round'; $('lLives').textContent = 'Lives'; $('lMoney').textContent = 'Apples $';
+  $('lRound').textContent = 'Round'; $('lLives').textContent = state.defend ? 'Hospital' : 'Lives'; $('lMoney').textContent = state.defend ? 'Budget $' : 'Apples $';
   $('sRound').textContent = state.round;
   $('sLives').textContent = fmtCount(state.lives);
   $('sMoney').textContent = fmtCount(Math.floor(state.money));
@@ -2611,8 +2782,10 @@ function refreshUI(force) {
     if (document.activeElement !== $('inRound')) $('inRound').value = state.round + 1;
   }
   const left = state.queue.length + state.enemies.length;
-  $('sub').textContent = state.inWave ? `Doctors remaining: ${left}` : (state.round === 0 ? `${CUR.map.name} (${CUR.map.level}) · ${state.diff.name}` : (state.auto && state.autoT > 0 ? 'Next round starting...' : 'Place kids, then start the next round.'));
-  if (state.round >= WIN_ROUND) $('sub').textContent = `Freeplay${state.round + (state.inWave ? 0 : 1) > DOUBLING_ROUND ? ` (doctors x${fmtMult(freeplayMult(state.round + (state.inWave ? 0 : 1)))})` : ''} · ` + $('sub').textContent;
+  const foes = state.defend ? 'Kids' : 'Doctors', mine = state.defend ? 'doctors' : 'kids';
+  $('legendtitle').textContent = `${foes} spotted`;
+  $('sub').textContent = state.inWave ? `${foes} remaining: ${left}` : (state.round === 0 ? (state.defend ? 'Hospital Defense · keep the kids out!' : `${CUR.map.name} (${CUR.map.level}) · ${state.diff.name}`) : (state.auto && state.autoT > 0 ? 'Next round starting...' : `Place ${mine}, then start the next round.`));
+  if (state.round >= winRound()) $('sub').textContent = `Freeplay${state.round + (state.inWave ? 0 : 1) > DOUBLING_ROUND ? ` (doctors x${fmtMult(freeplayMult(state.round + (state.inWave ? 0 : 1)))})` : ''} · ` + $('sub').textContent;
   const bs = $('btnStart');
   bs.disabled = state.inWave || state.over || state.menu;
   bs.textContent = state.inWave ? `Round ${state.round} in progress` : `Start Round ${state.round + 1}`;
@@ -2628,7 +2801,8 @@ function refreshUI(force) {
   const info = $('info');
   const t = state.selected;
   if (!t) {
-    if (lastInfoKey !== 'none') { info.innerHTML = 'Click a kid on the map to upgrade, sell, or change targeting.'; lastInfoKey = 'none'; }
+    const none = state.defend ? 'none-d' : 'none';
+    if (lastInfoKey !== none) { info.innerHTML = `Click a ${state.defend ? 'doctor' : 'kid'} on the map to upgrade, sell, or change targeting.`; lastInfoKey = none; }
   } else {
     const key = [t.id, t.paths.join(''), t.mode, [0, 1, 2].map(i => state.money >= pathCost(t, i)).join(''),
       sellValue(t), t.camo, state.money >= camoCost(t), t.pep, t.pepCamo, t.haste, t.reach, t.sleepT > 0, tierOf(t), t.t6 ? t7Lock(t) : [0, 1, 2].map(i => fuseLock(t, i)).join(','),
@@ -2640,7 +2814,8 @@ function refreshUI(force) {
       if (t.type === 'orchard') {
         stats = `<p>Income: <b>$${st.income}</b> per round</p>`;
         if (st.market) stats += `<p>Market: +${Math.round(st.market * 100)}% of round bonus</p>`;
-        if (st.pep) stats += `<p>Pep Talk: nearby kids +${Math.round(st.pep * 100)}% damage${t.paths[2] >= MAX_TIER ? ', see camo' : ''}</p>`;
+        if (st.heal || st.cash) stats += `<p>${PATH_NAMES[t.type][2]}: <b>+${st.heal} ${st.heal === 1 ? 'life' : 'lives'}</b> and <b>+$${st.cash}</b> per round</p>`;
+        if (st.pep) stats += `<p>${PATH_NAMES[t.type][2]}: nearby ${state.defend ? 'doctors' : 'kids'} +${Math.round(st.pep * 100)}% damage${t.paths[2] >= MAX_TIER ? ', see camo' : ''}</p>`;
       }
       else if (def.juice) {
         stats = `<p>Nearby kids attack <b>+${Math.round(st.haste * 100)}%</b> faster</p>`;
@@ -2674,7 +2849,7 @@ function refreshUI(force) {
         let preview = '';
         if (!lock) {
           const ns = towerStats({ ...t, paths: t.paths.map((v, j) => j === i ? v + 1 : v) });
-          if (t.type === 'orchard') preview = [`$${ns.income}/round`, `+${Math.round(ns.market * 100)}% bonus`, `+${Math.round(ns.pep * 100)}% dmg nearby`][i];
+          if (t.type === 'orchard') preview = [`$${ns.income}/round`, `+${Math.round(ns.market * 100)}% bonus`, `+${ns.heal} lives, +$${ns.cash}/round, +${Math.round(ns.pep * 100)}% dmg nearby`][i];
           else if (def.juice) preview = [`+${Math.round(st.haste * 100)}% → +${Math.round(ns.haste * 100)}% speed`, `+${Math.round(st.reach * 100)}% → +${Math.round(ns.reach * 100)}% range`, `zone ${Math.round(st.range)} → ${Math.round(ns.range)}`][i];
           else preview = [`dmg ${st.dmg.toFixed(1)} → ${ns.dmg.toFixed(1)}`, `every ${st.rate.toFixed(2)}s → ${ns.rate.toFixed(2)}s`, def.sniper ? `crit ${Math.round(st.crit * 100)}% → ${Math.round(ns.crit * 100)}%` : `range ${Math.round(st.range)} → ${Math.round(ns.range)}`][i];
           if (i === 0 && def.poison) preview = `rot ${st.poison.toFixed(1)}/s → ${ns.poison.toFixed(1)}/s`;
@@ -2691,7 +2866,7 @@ function refreshUI(force) {
           ? `<button disabled>${lock}</button>`
           : `<button data-act="up" data-path="${i}" ${state.money < cost ? 'disabled' : ''}>Tier ${tier + 1} &middot; $${cost} [${PATH_KEYS[i].toUpperCase()}]</button>`;
         const fl = fuseLock(t, i);
-        if (fl === '') btn += `<button class="fuse" data-act="fuse" data-path="${i}">Fuse ${T6_COUNT} into Tier 6 [V]</button>`;
+        if (fl === '') btn += `<button class="fuse" data-act="fuse" data-path="${i}">Fuse ${T6_COUNT} into a Lord [V]</button>`;
         else if (fl) btn += `<div class="phint">${fl}</div>`;
         return `<div class="path p${i}"><div class="phead"><b>${PATH_NAMES[t.type][i]}</b><span class="pips">${pips}</span></div>` +
           `<div class="phint">${hints[i]}${preview ? ` &middot; <span class="prev">${preview}</span>` : ''}</div>${btn}</div>`;
@@ -2699,12 +2874,12 @@ function refreshUI(force) {
       let fusedRow = '';
       if (t.t6) {
         const tl = t7Lock(t);
-        fusedRow = `<div class="path p${t.t6.path} t6"><div class="phead"><b>Tier 6 &middot; ${PATH_NAMES[t.type][t.t6.path]}</b></div>` +
+        fusedRow = `<div class="path p${t.t6.path} t6"><div class="phead"><b>Lord &middot; ${PATH_NAMES[t.type][t.t6.path]}</b></div>` +
           `<div class="phint">Fused from ${T6_COUNT} kids (${t.t6.parts.map(pp => pp.join('-')).join(', ')}). All their stats combined, x${T6_MULT}.</div>` +
-          (tl === '' ? `<button class="fuse t7" data-act="fuse7">Fuse all 3 Tier 6 into Tier 7 [V]</button>` : `<div class="phint">${tl}</div>`) + `</div>`;
+          (tl === '' ? `<button class="fuse t7" data-act="fuse7">Fuse all 3 Lords into the Champion [V]</button>` : `<div class="phint">${tl}</div>`) + `</div>`;
       } else if (t.t7) {
-        fusedRow = `<div class="path t6 t7"><div class="phead"><b>Tier 7 &middot; all paths</b></div>` +
-          `<div class="phint">Fused from 3 Tier 6 kids (${t.t7.parts.map(f => PATH_NAMES[t.type][f.path]).join(', ')}). All their stats combined, x${T7_MULT}. ` +
+        fusedRow = `<div class="path t6 t7"><div class="phead"><b>Champion &middot; all paths</b></div>` +
+          `<div class="phint">Fused from 3 Lords (${t.t7.parts.map(f => PATH_NAMES[t.type][f.path]).join(', ')}). All their stats combined, x${T7_MULT}. ` +
           `Sees camo, ignores armor, never misses.</div></div>` +
           `<div class="path boost"><div class="phead"><b>Empower</b><span>$${boostCost(1).toLocaleString()} per +1%</span></div>` +
           BOOSTS.map((b, i) => `<div class="brow p${i}"><span><b>${b.name}</b> +${boostOf(t, b.key)}%</span>` +
@@ -2714,12 +2889,12 @@ function refreshUI(force) {
       }
       const modes = isArea(def) ? '' :
         `<div class="row">${['first', 'last', 'strong', 'close'].map(m => `<button class="mode ${t.mode === m ? 'on' : ''}" data-act="mode" data-mode="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>`;
-      info.innerHTML = `<h3>${def.name}<span>${t.t7 ? 'Tier 7' : t.t6 ? 'Tier 6' : t.paths.join('-')}</span></h3>${stats}` +
+      info.innerHTML = `<h3>${def.name}<span>${t.t7 ? 'Champion' : t.t6 ? 'Lord' : t.paths.join('-')}</span></h3>${stats}` +
         (isSupport(def) ? '' : `<p>Knockouts: <b id="kills">${t.kills}</b></p>`) +
         (t.t6 || t.t7 ? fusedRow : pathRows) +
         (state.diff.noSell ? `<div class="row"><button disabled>No selling in Surgery</button></div>`
           : `<div class="row"><button data-act="sell">Sell $${sellValue(t)} [S]</button></div>`) +
-        (isArea(def) ? '' : `<div class="row">${t.camo ? '<p style="color:#81ecec;margin:0">Camo Goggles: can see War Medics</p>'
+        (isArea(def) ? '' : `<div class="row">${t.camo ? '<p style="color:#81ecec;margin:0">Camo Goggles: can see camo</p>'
           : `<button data-act="camo" ${state.money < camoCost(t) ? 'disabled' : ''}>Camo Goggles $${camoCost(t)} [G]</button>`}</div>`) + modes;
     }
     const k = document.getElementById('kills');
@@ -2743,12 +2918,12 @@ $('info').addEventListener('click', ev => {
 function refreshLegend() {
   const el = $('legend');
   if (!state) { el.innerHTML = ''; return; }
-  const keys = Object.keys(ENEMIES).filter(k => state.seen.has(k)).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro);
+  const keys = Object.keys(ENEMIES).filter(k => state.seen.has(k) && inMode(ENEMIES[k])).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro);
   let html = keys.map(k => {
     const e = ENEMIES[k];
     return `<div class="lg" title="${e.desc}"><span class="dot" style="background:${e.coat};border-color:${e.scrub}"></span>${e.name}<small>R${e.intro}${e.bossOnly ? ' boss' : ''}</small></div>`;
   }).join('');
-  const upcoming = Object.keys(ENEMIES).filter(k => !state.seen.has(k)).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro)[0];
+  const upcoming = Object.keys(ENEMIES).filter(k => !state.seen.has(k) && inMode(ENEMIES[k]) && !ENEMIES[k].noLegend).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro)[0];
   if (upcoming && !state.reverse) html += `<div class="next">Next arrival: ${ENEMIES[upcoming].name} (round ${ENEMIES[upcoming].intro})</div>`;
   if (!keys.length && !upcoming) html = '';
   el.innerHTML = html;
@@ -2786,6 +2961,7 @@ function showOverlay(kind) {
       <h3 class="mh">2. Pick a difficulty to start</h3>
       <div class="diffs">${diffBtns}</div>
       ${secretUnlocked() ? '<button class="bigbtn secret" data-act="reverse">Code Blue: play as the Hospital</button>' : ''}
+      ${defendUnlocked() ? '<button class="bigbtn secret" data-act="defend">Hospital Defense: keep the kids out</button>' : ''}
       <ul>
         <li>Buy kids (1-9, 0, Q-R, T-U), click grass to place them. Click a kid to upgrade it (Z/X/C), sell (S) or change targeting.</li>
         <li>Each kid has 3 upgrade paths (damage, speed, range) with 5 tiers. Pick two paths: one can go to tier 5, the other only to tier 2.</li>
@@ -2795,6 +2971,15 @@ function showOverlay(kind) {
         <li>Armor shrinks each hit. The Slingshot Sniper ignores armor and can hit doctors anywhere on the map.</li>
         <li>War Medics (round 35) are camouflaged. Only kids with Camo Goggles (G) can target them.</li>
       </ul></div>`;
+  } else if (kind === 'over' && state.defend) {
+    html = `<div class="card"><h2>The kids got into the hospital!</h2>
+      <p>They stormed the doors on round <b>${state.round}</b>. Somebody's getting a lollipop.</p>
+      <button class="bigbtn" data-act="retry">Try again</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
+  } else if (kind === 'win' && state.defend) {
+    html = `<div class="card"><h2>Hospital saved!</h2>
+      <p>You sent The Principal packing and kept every kid out through round ${DEFEND_WIN}.</p>
+      <p>Freeplay lets you keep going as long as you like. How far can you get?</p>
+      <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   } else if (kind === 'over') {
     html = `<div class="card"><h2>The doctors got in!</h2>
       <p>They reached the orchard on round <b>${state.round}</b> (${CUR.map.name}, ${state.diff.name}).<br>Best here: round ${Math.max(best[`${state.mapId}:${state.diffKey}`] || 0, state.round - 1)}.</p>
@@ -2840,13 +3025,14 @@ overlay.addEventListener('click', ev => {
     if (d) { restoreGame(d); hideOverlay(); showBanner(`<div class="big">Welcome back!</div><div>Round ${state.round + 1} is ready when you are.</div>`, 2.5); }
   }
   else if (b.dataset.act === 'reverse') { startShift(); hideOverlay(); }
+  else if (b.dataset.act === 'defend') { startDefend(); hideOverlay(); }
   else if (b.dataset.diff) {
     const secret = bumpSecret(menuMap);
     if (secret === 'go') { startShift(true); hideOverlay(); return; }
     newGame(b.dataset.diff, menuMap); hideOverlay();
     if (secret === 'hint') { showBanner('<div class="big">The hospital lights flicker...</div>', 3); refreshUI(true); return; } showBanner('<div class="big">Place some kids!</div><div>Then press Start Round (Space).</div>', 3); refreshUI(true);
   }
-  else if (b.dataset.act === 'retry') { newGame(state.diffKey, state.mapId); hideOverlay(); refreshUI(true); }
+  else if (b.dataset.act === 'retry') { if (state.defend) startDefend(); else newGame(state.diffKey, state.mapId); hideOverlay(); refreshUI(true); }
   else if (b.dataset.act === 'menu') { menuFromGame = !state.over; showOverlay('menu'); }
   else if (b.dataset.act === 'continue') { hideOverlay(); showBanner(`<div class="big">Freeplay!</div><div>Go forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty.</div>`, 3); refreshUI(true); }
 });
@@ -2876,16 +3062,100 @@ const SPEEDS = [1, 2, 3, 5, 10];
 function cycleSpeed() { if (!state) return; state.speed = SPEEDS[(SPEEDS.indexOf(state.speed) + 1) % SPEEDS.length]; refreshUI(true); }
 function togglePause() { if (!state || state.menu || state.over) return; state.paused = !state.paused; refreshUI(true); }
 
+// ======================= HOSPITAL DEFENSE (secret) =======================
+// On Meadow Loop, click every apple tree to shake its apples off. When the last tree is bare,
+// the tables turn: kids march from the orchard to the hospital, and you hire doctors to stop them.
+// Each doctor is one of the kid towers underneath, with its own name, look and upgrade names.
+const DEF_TYPES = ['kid', 'sling', 'basket', 'caramel', 'rotten', 'bell', 'hose', 'slushie', 'orchard'];
+const DEF_SKIN = {
+  kid:     { name: 'Intern',            style: 'intern',      paths: ['Hotter Coffee',    'Caffeine Rush', 'Long Throw'],
+             desc: 'Reliable all-rounder. Throws hot coffee.' },
+  sling:   { name: 'Surgeon',           style: 'surgeon',     paths: ['Sharper Scalpel',  'Steady Hands',  'Precision Cuts'],
+             desc: 'Sniper: flings a scalpel at any kid on the map, instantly. Ignores armor. Slow to reload. Precision Cuts adds critical hits.' },
+  basket:  { name: 'Paramedic',         style: 'paramedic',   paths: ['Heavy Kits',       'Fast Response', 'Long Toss'],
+             desc: 'Lobs first-aid kits that bonk a whole crowd.' },
+  caramel: { name: 'Nurse',             style: 'nurse',       paths: ['Stronger Dose',    'Quick Shots',   'Long Needle'],
+             desc: 'Sleepy-time shots slow kids down (bosses resist half).' },
+  rotten:  { name: 'Pharmacist',        style: 'physician',   paths: ['Extra Bitter',     'Fast Pour',     'Long Lob'],
+             desc: 'Yucky medicine. The yuck ignores armor and keeps working for a few seconds. Weak vs. crowds.' },
+  bell:    { name: 'Receptionist',      style: 'junior',      paths: ['Louder Bell',      'Quick Ring',    'Echo'],
+             desc: '"Please take a number!" Every kid in range takes a little damage and gets shoved back down the path. Hits camo too.' },
+  hose:    { name: 'Radiologist',       style: 'radiologist', paths: ['Stronger Beam',    'Faster Scan',   'Long Range'],
+             desc: 'X-ray beam that hits harder the longer it stays on one kid (up to x4). Soaks through half their armor. Boss melter.' },
+  slushie: { name: 'Anesthesiologist',  style: 'anesth',      paths: ['Deep Sleep',       'Quick Dose',    'Wide Gas'],
+             desc: 'Knocks out every kid nearby for a moment. Sleeping kids take +30% damage from everything. Bosses wake up fast. Hits camo too.' },
+  orchard: { name: 'Billing Office',    style: 'head',        paths: ['Insurance Claims', 'Gift Shop',     'Morale Boost'],
+             desc: 'Doesn\'t fight. Sends out bills for +$ at the end of every round. Morale Boost also brings back lives and extra $ every round, and makes nearby doctors hit harder.' },
+};
+// The kid versions, saved once so the skin can be taken off again.
+const KID_SKIN = {};
+for (const k in TOWERS) KID_SKIN[k] = { name: TOWERS[k].name, desc: TOWERS[k].desc, shirt: TOWERS[k].shirt, key: TOWERS[k].key, paths: [...PATH_NAMES[k]] };
+let skinOn = false;
+function applySkin(on) {
+  if (on === skinOn) return;
+  skinOn = on;
+  for (const k in TOWERS) {
+    const kid = KID_SKIN[k], doc = on ? DEF_SKIN[k] : null, i = DEF_TYPES.indexOf(k);
+    TOWERS[k].name = doc ? doc.name : kid.name;
+    TOWERS[k].desc = doc ? doc.desc : kid.desc;
+    TOWERS[k].shirt = doc ? ENEMIES[doc.style].scrub : kid.shirt;
+    // only the doctors can be hired, on keys 1-9
+    TOWERS[k].key = on ? (i >= 0 ? String(i + 1) : '') : kid.key;
+    PATH_NAMES[k] = doc ? [...doc.paths] : [...kid.paths];
+  }
+}
+
+// Which trees on Meadow Loop have been shaken this game.
+const DEFEND_MAP = 'meadow';
+function shakeTree(p) {
+  if (state.mapId !== DEFEND_MAP || state.defend) return false;
+  const i = CUR.trees.findIndex(tr => Math.hypot(tr.x - p.x, tr.y - p.y) < 20);
+  if (i < 0) return false;
+  const tr = CUR.trees[i];
+  state.shaken = state.shaken || new Set();
+  if (!state.shaken.has(i)) {
+    state.shaken.add(i);
+    burst(tr.x, tr.y, '#e53935', 8, 90);
+    burst(tr.x, tr.y, '#43a047', 6, 60);
+  }
+  if (state.shaken.size >= CUR.trees.length) {
+    try { localStorage.setItem('appleAttackDefendOn', '1'); } catch (e) { /* storage unavailable */ }
+    startDefend(true);
+  }
+  return true;
+}
+function defendUnlocked() { try { return localStorage.getItem('appleAttackDefendOn') === '1'; } catch (e) { return false; } }
+
+function startDefend(first = false) {
+  newGame('normal', DEFEND_MAP);
+  state.defend = true;
+  state.diff = { ...DIFFS.normal, name: 'Hospital Defense' };
+  // same field, but the kids walk it backwards: from the orchard gate to the hospital
+  const id = DEFEND_MAP + ':defend';
+  if (!MAPDATA[id]) {
+    const base = mapData(DEFEND_MAP);
+    MAPDATA[id] = { ...base, routes: base.map.paths.map(tiles => buildRoute([...tiles].reverse())) };
+  }
+  CUR = MAPDATA[id];
+  applySkin(true);
+  buildShop();
+  refreshLegend();
+  refreshUI(true);
+  showBanner(first ? '<div class="big">SECRET: Hospital Defense!</div><div class="new">The kids are storming the hospital. Hire doctors to stop them!</div>'
+    : '<div class="big">Hospital Defense</div><div>Hire doctors, then press Start Round (Space).</div>', 4);
+}
+
 // ======================= CODE BLUE (secret) =======================
-// Start a new game on the Insane map 5 times in a row (leaving to the menu in between) and the
+// Start a new game on an Insane map 5 times in a row (leaving to the menu in between) and the
 // tables turn: you're the Hospital sending doctors, and the computer runs the kids.
 const SECRET_KEY = 'appleAttackSecret', SECRET_MAP = 'four', SECRET_STARTS = 5;
 function secretUnlocked() { try { return localStorage.getItem(SECRET_KEY + 'On') === '1'; } catch (e) { return false; } }
-// Counts consecutive new games on the Insane map. 'go' on the 5th, 'hint' on the 4th.
+// Counts consecutive new games on Insane maps (Code Blue itself is played on Four Corners). 'go' on the 5th, 'hint' on the 4th.
 let secretCount = 0;
 function bumpSecret(mapId) {
   try { secretCount = Number(localStorage.getItem(SECRET_KEY)) || 0; } catch (e) { /* storage unavailable: count in memory */ }
-  secretCount = mapId === SECRET_MAP ? secretCount + 1 : 0;
+  const insane = (MAPS.find(m => m.id === mapId) || {}).level === 'Insane';
+  secretCount = insane ? secretCount + 1 : 0;
   const go = secretCount >= SECRET_STARTS;
   if (go) secretCount = 0;
   try { localStorage.setItem(SECRET_KEY, String(secretCount)); if (go) localStorage.setItem(SECRET_KEY + 'On', '1'); } catch (e) { /* storage unavailable */ }
@@ -3033,6 +3303,7 @@ function doctorPortrait(k) {
 
 let lastShiftInfo = '';
 function refreshShiftUI(force) {
+  $('legendtitle').textContent = 'Doctors spotted';
   $('lRound').textContent = 'Shift level'; $('lLives').textContent = 'Orchard'; $('lMoney').textContent = 'Budget $';
   $('sRound').textContent = state.round;
   $('sLives').textContent = Math.max(0, state.lives);
@@ -3092,6 +3363,7 @@ canvas.addEventListener('pointerdown', ev => {
   }
   let hit = null;
   for (const t of state.towers) if (Math.hypot(t.x - p.x, t.y - p.y) < 18) hit = t;
+  if (!hit && shakeTree(p)) { refreshUI(true); return; }
   state.selected = hit;
   refreshUI(true);
 });
