@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aple Attack: Orchard Defense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #2b1d14;
@@ -14,39 +17,76 @@
     --accent: #e74c3c;
     --good: #6ab04c;
     --gold: #f6c343;
+    --display: "Fredoka", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    --frame: #6b4528;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
     min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background-image: radial-gradient(ellipse at 40% 30%, #3b2819 0%, var(--bg) 70%);
+    /* warm glow over faint wood grain */
+    background-image:
+      radial-gradient(ellipse at 35% 25%, rgba(120,72,36,.35) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 90%, rgba(70,110,40,.12) 0%, transparent 55%),
+      repeating-linear-gradient(92deg, rgba(0,0,0,.05) 0 2px, transparent 2px 9px, rgba(255,255,255,.015) 9px 10px, transparent 10px 23px),
+      linear-gradient(180deg, #2f1f15, #22170f);
+    background-attachment: fixed;
   }
-  #wrap { display: flex; gap: 12px; padding: 12px; max-width: 1120px; width: 100%; align-items: flex-start; }
-  #stage { position: relative; flex: 1 1 auto; min-width: 0; }
+  #wrap { display: flex; gap: 14px; padding: 14px; max-width: 1340px; width: 100%; align-items: stretch; justify-content: center; }
+  /* shrink the map on short screens so the kids bar below it stays visible */
+  #main { flex: 0 1 calc((100vh - 268px) * 4 / 3); min-width: min(100%, 520px); max-width: 1000px; display: flex; flex-direction: column; gap: 10px; }
+  /* wooden picture frame around the map */
+  #stage {
+    position: relative; padding: 7px; border-radius: 16px;
+    background: linear-gradient(160deg, #8a5a33, var(--frame) 40%, #4e321c);
+    box-shadow: 0 10px 30px rgba(0,0,0,.55), inset 0 1px rgba(255,255,255,.18), inset 0 -2px rgba(0,0,0,.3);
+  }
+  #shopbar {
+    background: linear-gradient(180deg, #4a3221, var(--panel) 80px); border-radius: 14px; padding: 10px 12px 12px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.45), inset 0 1px rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.06);
+  }
+  #shopbar h2 { margin: 0 0 8px; }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.5); cursor: crosshair; touch-action: none; }
+  #stage > canvas { border-radius: 10px; box-shadow: 0 0 0 2px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.2); }
   #panel {
-    width: 290px; flex: 0 0 290px; background: linear-gradient(180deg, #46301f, var(--panel) 120px); border-radius: 10px; padding: 12px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.4), inset 0 1px rgba(255,255,255,.06); max-height: calc(100vh - 24px); overflow-y: auto;
-    border: 1px solid rgba(255,255,255,.05);
+    width: 290px; flex: 0 0 290px; background: linear-gradient(180deg, #4a3221, var(--panel) 140px); border-radius: 14px; padding: 14px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.45), inset 0 1px rgba(255,255,255,.07); max-height: calc(100vh - 28px); overflow-y: auto;
+    border: 1px solid rgba(255,255,255,.06);
+    display: flex; flex-direction: column;
   }
+  /* the "Doctors spotted" list fills whatever height is left */
+  #legend { flex: 1 1 auto; }
   h1 {
-    font-size: 22px; margin: 0 0 10px; color: var(--gold); text-align: center; letter-spacing: .5px;
-    text-shadow: 0 2px 0 #7a4e12, 0 3px 8px rgba(0,0,0,.4);
-    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--display); font-weight: 700;
+    font-size: 27px; margin: 0 0 12px; color: var(--gold); text-align: center; letter-spacing: .3px;
+    text-shadow: 0 2px 0 #7a4e12, 0 4px 10px rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center; gap: 9px;
   }
   h1::before {
-    content: ''; width: 18px; height: 18px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #ff8a7a, #e74c3c 45%, #a8281b);
-    box-shadow: 0 2px 4px rgba(0,0,0,.4);
+    content: ''; width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
+    background: radial-gradient(circle at 35% 32%, #ffb3a6 0 8%, #ff6b5a 22%, #e74c3c 50%, #a8281b);
+    box-shadow: 0 2px 4px rgba(0,0,0,.45);
+    transform: rotate(-12deg);
   }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 6px; }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
-  .stats div { background: var(--panel2); border-radius: 8px; padding: 6px 2px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; box-shadow: inset 0 -2px rgba(0,0,0,.18); }
-  .stats b { display: block; font-size: 19px; color: var(--text); text-transform: none; letter-spacing: 0; }
+  h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); margin: 16px 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(201,179,145,.35), transparent); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; text-align: center; }
+  .stats div {
+    background: linear-gradient(180deg, #57402d, var(--panel2)); border-radius: 10px; padding: 7px 2px 6px;
+    font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px;
+    box-shadow: inset 0 -3px rgba(0,0,0,.2), inset 0 1px rgba(255,255,255,.07);
+    border-top: 3px solid #8fb8ff;
+  }
+  .stats div:nth-child(2) { border-top-color: #ff7b7b; }
+  .stats div:nth-child(3) { border-top-color: var(--gold); }
+  .stats b { display: block; font-family: var(--display); font-weight: 600; font-size: 22px; line-height: 1.15; color: var(--text); text-transform: none; letter-spacing: 0; }
   .stats div:nth-child(2) b { color: #ff9f9f; }
   .stats div:nth-child(3) b { color: var(--gold); }
-  #sub { font-size: 12px; color: var(--muted); text-align: center; margin-top: 6px; min-height: 16px; }
+  #sub { font-size: 12px; color: var(--muted); text-align: center; margin-top: 8px; min-height: 16px; }
   .controls { display: flex; gap: 6px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
   button {
     font: inherit; color: var(--text); background: var(--panel2); border: 1px solid #6b4a33;
@@ -57,8 +97,24 @@
   button:hover:not(:disabled) { background: #66462f; }
   button:active:not(:disabled) { transform: translateY(1px); }
   button:disabled { opacity: .45; cursor: not-allowed; }
-  #btnStart { flex: 1; background: #3f7d2c; border-color: #5aa33f; font-weight: bold; }
-  #btnStart:hover:not(:disabled) { background: #4c9535; }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  #btnStart {
+    flex: 1; white-space: nowrap; font-family: var(--display); font-weight: 600; font-size: 15px; padding: 8px 10px;
+    background: linear-gradient(180deg, #5bab3d, #3f7d2c); border-color: #6fc04f; color: #fff;
+    box-shadow: inset 0 1px rgba(255,255,255,.25), inset 0 -3px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.3);
+    text-shadow: 0 1px 1px rgba(0,0,0,.35);
+  }
+  #btnStart:hover:not(:disabled) { background: linear-gradient(180deg, #67bd47, #4a9134); }
+  /* while a round is running: an animated "busy" stripe instead of a faded green */
+  #btnStart:disabled {
+    opacity: 1; cursor: default; color: #f3dfb6; border-color: #8a6a35; font-size: 13.5px;
+    background: repeating-linear-gradient(-45deg, #6a4c26 0 10px, #5a3f1f 10px 20px);
+    background-size: 28.28px 28.28px; animation: busy 1s linear infinite;
+    box-shadow: inset 0 -2px rgba(0,0,0,.25);
+  }
+  @keyframes busy { to { background-position: 28.28px 0; } }
+  @media (prefers-reduced-motion: reduce) { #btnStart:disabled { animation: none; } }
+  #btnSpeed, #btnPause { min-width: 40px; font-weight: bold; font-family: var(--display); font-size: 15px; padding: 7px 8px; }
   .roundpick { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .roundpick[hidden] { display: none; }
   .roundpick input {
@@ -72,7 +128,22 @@
   .card .resume { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 4px 0 2px; }
   .card .resume small { color: var(--muted); font-size: 12px; width: 100%; }
   label.auto { font-size: 12px; color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
-  #shop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #shop { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  /* compact shop tiles in the bottom bar: portrait on top, name and price below */
+  #shop .shopbtn {
+    flex-direction: column; align-items: center; text-align: center; padding: 5px 3px 5px; gap: 2px; position: relative;
+    border-left: 0; border-bottom: 3px solid var(--kid, #6b4a33); border-radius: 10px;
+    background-image: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.09), transparent 70%), linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.1));
+  }
+  #shop .shopbtn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.35), 0 3px 0 -1px var(--kid, transparent), inset 0 1px rgba(255,255,255,.1); }
+  #shop .shopbtn .portrait { width: 34px; height: 34px; flex-basis: 34px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
+  #shop .shopbtn .txt { align-items: center; width: 100%; }
+  #shop .shopbtn .nm { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  #shop .shopbtn .ct {
+    justify-content: center; font-size: 11px; font-weight: bold; margin-top: 1px;
+    background: rgba(0,0,0,.28); border-radius: 999px; padding: 0 7px; line-height: 16px;
+  }
+  #shop .shopbtn .key { position: absolute; top: 3px; right: 3px; margin: 0; }
   .shopbtn {
     text-align: left; padding: 4px 6px 4px 4px; display: flex; align-items: center; gap: 4px;
     border-left: 3px solid var(--kid, #6b4a33);
@@ -85,8 +156,8 @@
   .shopbtn .key { font-size: 10px; color: var(--muted); margin-left: auto; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; padding: 0 4px; line-height: 14px; }
   .shopbtn.sel { outline: 2px solid var(--gold); box-shadow: 0 0 12px rgba(246,195,67,.35); background-color: #66462f; }
   .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: 0 0 auto; border: 2px solid rgba(255,255,255,.7); }
-  #shopdesc { font-size: 12px; color: var(--muted); min-height: 32px; margin-top: 6px; }
-  #info { background: var(--panel2); border-radius: 8px; padding: 8px; font-size: 12px; min-height: 40px; color: var(--muted); }
+  #shopdesc { font-size: 12px; color: var(--muted); min-height: 16px; margin-top: 6px; }
+  #info { background: var(--panel2); border-radius: 10px; padding: 9px; box-shadow: inset 0 1px rgba(255,255,255,.05); font-size: 12px; min-height: 40px; color: var(--muted); }
   #info h3 { margin: 0 0 4px; font-size: 14px; color: var(--text); display: flex; justify-content: space-between; }
   #info p { margin: 3px 0; }
   #info .row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
@@ -102,35 +173,58 @@
   #info .phint { font-size: 11px; margin: 2px 0 4px; }
   #info .phint .prev { color: #9be38c; }
   #info .path button { width: 100%; font-size: 12px; padding: 4px 6px; }
+  #info .path button.fuse { margin-top: 4px; font-weight: bold; color: #2b1d14; border-color: #f6c343; background: linear-gradient(90deg, #f6c343, #ffe58a, #f6c343); }
+  #info .path.t6 { border-color: #f6c343; background: rgba(246,195,67,.12); }
+  #info .path.t7 { border-color: #a29bfe; background: rgba(162,155,254,.14); }
+  #info .path.boost { border-color: #a29bfe; }
+  #info .brow { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+  #info .brow span { flex: 1; color: var(--text); }
+  #info .brow.p0 b { color: #ff7675; } #info .brow.p1 b { color: #74b9ff; } #info .brow.p2 b { color: #55efc4; }
+  #info .path .brow button { width: auto; flex: 0 0 auto; padding: 3px 8px; }
+  #info .path button.fuse.t7 { background: linear-gradient(90deg, #a29bfe, #ffe58a, #74b9ff); border-color: #a29bfe; }
   #legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-  #legend .lg { display: flex; gap: 6px; align-items: center; background: var(--panel2); border-radius: 6px; padding: 4px 6px; }
+  #legend .lg { display: flex; gap: 7px; align-items: center; background: var(--panel2); border-radius: 8px; padding: 5px 8px; }
   #legend .lg small { color: var(--muted); margin-left: auto; }
   #legend .next { color: var(--muted); font-style: italic; padding: 2px 4px; }
   #banner {
     position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
-    background: rgba(30,18,10,.88); border: 2px solid var(--gold); border-radius: 10px;
-    padding: 8px 18px; text-align: center; pointer-events: none; opacity: 0; transition: opacity .4s;
+    background: linear-gradient(180deg, rgba(58,36,20,.94), rgba(30,18,10,.94)); border: 2px solid var(--gold); border-radius: 14px;
+    padding: 10px 22px; text-align: center; pointer-events: none; opacity: 0; transition: opacity .4s;
     font-size: 15px; max-width: 90%;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 1px rgba(255,255,255,.12);
   }
-  #banner .big { font-size: 22px; font-weight: bold; color: var(--gold); }
+  #banner .big { font-family: var(--display); font-size: 25px; font-weight: 700; color: var(--gold); text-shadow: 0 2px 0 #7a4e12; }
   #banner .new { color: #ff9f9f; font-weight: bold; }
   #overlay {
-    position: fixed; inset: 0; background: rgba(20,12,6,.86); z-index: 10;
+    position: fixed; inset: 0; background: rgba(20,12,6,.8); z-index: 10; backdrop-filter: blur(3px);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
   #overlay.hidden { display: none; }
-  .card { background: var(--panel); border-radius: 12px; padding: 20px 24px; max-width: 520px; width: 100%; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
-  .card h2 { font-size: 30px; color: var(--gold); text-transform: none; letter-spacing: 0; margin: 0 0 6px; }
+  .card {
+    background: linear-gradient(180deg, #4a3221, var(--panel) 160px); border-radius: 16px; padding: 22px 26px; max-width: 520px; width: 100%; text-align: center;
+    box-shadow: 0 14px 50px rgba(0,0,0,.65), inset 0 1px rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.07);
+  }
+  .card h2 {
+    display: block; font-family: var(--display); font-weight: 700; font-size: 40px; color: var(--gold); text-transform: none; letter-spacing: .3px; margin: 0 0 6px;
+    text-shadow: 0 3px 0 #7a4e12, 0 6px 14px rgba(0,0,0,.45);
+  }
+  .card h2::after { display: none; }
   .card p { color: var(--muted); font-size: 14px; line-height: 1.45; }
   .diffs { display: flex; gap: 8px; margin: 14px 0 6px; flex-wrap: wrap; }
-  .diffs button { flex: 1; min-width: 130px; padding: 10px; }
-  .diffs button b { display: block; font-size: 16px; color: var(--text); }
+  .diffs button { flex: 1; min-width: 130px; padding: 10px; border-top: 4px solid var(--lvl, #6b4a33); border-radius: 10px; }
+  .diffs button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.1); }
+  .diffs button[data-diff="super"] { --lvl: #74b9ff; }
+  .diffs button[data-diff="easy"] { --lvl: #6ab04c; }
+  .diffs button[data-diff="normal"] { --lvl: #f6c343; }
+  .diffs button[data-diff="hard"] { --lvl: #eb4d4b; }
+  .diffs button[data-diff="surgery"] { --lvl: #be2edd; }
+  .diffs button b { display: block; font-family: var(--display); font-weight: 600; font-size: 18px; color: var(--text); }
   .diffs button span { font-size: 11px; color: var(--muted); }
   .card { max-height: calc(100vh - 32px); overflow-y: auto; }
   .card.wide { max-width: 760px; }
   .card h3.mh { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 12px 0 6px; text-align: left; }
   .maps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .mapbtn { padding: 5px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+  .mapbtn { padding: 5px; border-radius: 10px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
   .mapbtn canvas { width: 100%; height: auto; border-radius: 5px; display: block; }
   .mapbtn .mname { font-weight: bold; font-size: 13px; }
   .mapbtn .mlevel { font-size: 11px; color: #2b1d14; border-radius: 4px; padding: 1px 4px; font-weight: bold; }
@@ -138,19 +232,33 @@
   .card p.mdesc { margin: 8px 0 0; font-size: 13px; }
   @media (max-width: 560px) { .maps { grid-template-columns: repeat(2, 1fr); } }
   .card ul { text-align: left; color: var(--muted); font-size: 13px; padding-left: 18px; line-height: 1.5; }
-  .card .bigbtn { font-size: 18px; padding: 10px 22px; background: #3f7d2c; border-color: #5aa33f; margin: 4px; }
+  .card .bigbtn {
+    font-family: var(--display); font-weight: 600; font-size: 19px; padding: 10px 24px; margin: 4px; color: #fff; border-radius: 10px;
+    background: linear-gradient(180deg, #5bab3d, #3f7d2c); border-color: #6fc04f;
+    box-shadow: inset 0 1px rgba(255,255,255,.25), inset 0 -3px rgba(0,0,0,.2), 0 3px 8px rgba(0,0,0,.3);
+  }
+  .card .bigbtn:hover { background: linear-gradient(180deg, #67bd47, #4a9134); }
   @media (max-width: 860px) {
     #wrap { flex-direction: column; }
     #panel { width: 100%; flex: 1 1 auto; max-height: none; }
+    #main { flex: 1 1 auto; width: 100%; max-width: none; }
+    #shop { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <div id="stage">
-    <canvas id="game" width="800" height="600"></canvas>
-    <div id="banner"></div>
-    <div id="overlay"></div>
+  <div id="main">
+    <div id="stage">
+      <canvas id="game" width="800" height="600"></canvas>
+      <div id="banner"></div>
+      <div id="overlay"></div>
+    </div>
+    <section id="shopbar">
+      <h2>Kids (towers)</h2>
+      <div id="shop"></div>
+      <div id="shopdesc">Pick a kid, then click the grass to place. Right-click or Esc cancels.</div>
+    </section>
   </div>
   <aside id="panel">
     <h1>Apple Attack</h1>
@@ -164,11 +272,11 @@
       <button id="btnStart">Start Round 1</button>
       <button id="btnSpeed" title="Game speed (F)">1x</button>
       <button id="btnPause" title="Pause (P)">II</button>
-      <label class="auto"><input type="checkbox" id="chkAuto"> Auto</label>
     </div>
     <div class="controls savebar">
       <button id="btnSave" title="Save game (Ctrl+S)">Save</button>
       <button id="btnMenu" title="Main menu (M)">Menu</button>
+      <label class="auto" title="Start the next round automatically"><input type="checkbox" id="chkAuto"> Auto</label>
       <span id="saveinfo"></span>
     </div>
     <div class="controls roundpick" id="roundpick" hidden>
@@ -176,9 +284,6 @@
       <input type="number" id="inRound" min="1" max="999" value="1">
       <button id="btnJump">Go</button>
     </div>
-    <h2>Kids (towers)</h2>
-    <div id="shop"></div>
-    <div id="shopdesc">Pick a kid, then click the grass to place. Right-click or Esc cancels.</div>
     <h2>Selected</h2>
     <div id="info">Click a kid on the map to upgrade, sell, or change targeting.</div>
     <h2>Doctors spotted</h2>
@@ -636,7 +741,130 @@ function spawnEnemy(key, boss, d0 = 0, summoned = false, route = null) {
   return e;
 }
 
+// ---- Tier 6 fusion ----
+// Five kids of the same type, all at tier 5 in the same path, fuse into one Tier 6 kid.
+// Its stats combine all five, then x1.25. One Tier 6 per path per kid type.
+// The three Tier 6 kids of one type (one per path) fuse into a Tier 7 kid: their stats combined,
+// x2, and it also sees camo, ignores armor and never misses. One Tier 7 per kid type, and it
+// takes up all three Tier 6 spots for that type.
+const T6_COUNT = 5, T6_MULT = 1.25, T7_MULT = 2;
+// Added together across the five kids. Attack speed is combined separately (attacks per second add up).
+// Everything else (range, splash, durations, crit chance...) takes the best of the five.
+const T6_SUM = ['dmg', 'poison', 'income', 'market', 'pep', 'bounces', 'maxPies', 'maxBees', 'knock'];
+function fuseStats(list, mult) {
+  const out = {};
+  for (const k in list[0]) {
+    const vals = list.map(st => st[k]);
+    if (k === 'rate') {
+      const perSec = vals.reduce((sum, v) => sum + (v > 0 ? 1 / v : 0), 0);
+      out.rate = perSec > 0 ? 1 / (perSec * mult) : 0;
+    } else if (T6_SUM.includes(k)) out[k] = vals.reduce((sum, v) => sum + v, 0) * mult;
+    else out[k] = Math.max(...vals) * mult;
+  }
+  out.crit = Math.min(1, out.crit);
+  out.slow = Math.min(0.9, out.slow);
+  for (const k of ['bounces', 'maxPies', 'maxBees']) out[k] = Math.round(out[k]);
+  return out;
+}
+// Is the Tier 6 spot for this kid type + path taken (by a Tier 6, or by a Tier 7 that holds all three)?
+const t6Taken = (type, path) => state.towers.some(o => o.type === type && (o.t7 || (o.t6 && o.t6.path === path)));
+// Other kids that could be fused into t along path i, nearest first.
+const fuseCandidates = (t, i) => state.towers
+  .filter(o => o !== t && !o.t6 && !o.t7 && o.type === t.type && o.paths[i] >= MAX_TIER)
+  .sort((p, q) => Math.hypot(p.x - t.x, p.y - t.y) - Math.hypot(q.x - t.x, q.y - t.y));
+// null: no fusion on this path. '': ready. Otherwise the reason it can't fuse yet.
+function fuseLock(t, i) {
+  if (t.t6 || t.t7 || t.paths[i] < MAX_TIER) return null;
+  if (state.towers.some(o => o.t7 && o.type === t.type)) return `Your Tier 7 ${TOWERS[t.type].name} holds all its Tier 6 spots`;
+  if (t6Taken(t.type, i)) return `You already have a Tier 6 ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name}`;
+  const n = fuseCandidates(t, i).length + 1;
+  return n < T6_COUNT ? `Tier 6 needs ${T6_COUNT} tier-5 ${PATH_NAMES[t.type][i]} ${TOWERS[t.type].name}s (${n}/${T6_COUNT})` : '';
+}
+function absorb(t, others) {
+  for (const o of others) {
+    t.spent += o.spent;
+    t.kills += o.kills;
+    if (o.camo) t.camo = true;
+    burst(o.x, o.y, '#f6c343', 14, 90);
+    addText(o.x, o.y - 24, 'Fused!', '#f6c343', 1);
+  }
+  for (const p of state.traps) if (others.includes(p.tower)) p.tower = t;
+  for (const b of state.bees) if (others.includes(b.tower)) b.tower = t;
+  state.towers = state.towers.filter(o => !others.includes(o));
+  state.selected = t;
+}
+function fuseTower(t, i) {
+  if (fuseLock(t, i) !== '') return;
+  const others = fuseCandidates(t, i).slice(0, T6_COUNT - 1);
+  t.t6 = { path: i, parts: [t, ...others].map(o => [...o.paths]) };
+  absorb(t, others);
+  burst(t.x, t.y, '#ffe58a', 40, 180);
+  stars(t.x, t.y, 36, 200);
+  state.shake = Math.max(state.shake, 8);
+  addText(t.x, t.y - 28, 'TIER 6!', '#f6c343', 1.6);
+  saveGame();
+  refreshUI(true);
+}
+// The other two Tier 6 kids of t's type (the other two paths), if they exist.
+const t7Partners = t => state.towers.filter(o => o !== t && o.t6 && o.type === t.type && o.t6.path !== t.t6.path);
+// null: not a Tier 6. '': ready. Otherwise how far along the set is.
+function t7Lock(t) {
+  if (!t.t6) return null;
+  const have = new Set([t.t6.path, ...t7Partners(t).map(o => o.t6.path)]);
+  if (have.size === 3) return '';
+  const missing = [0, 1, 2].filter(i => !have.has(i)).map(i => PATH_NAMES[t.type][i]).join(' and ');
+  return `Tier 7 needs a Tier 6 ${TOWERS[t.type].name} on all 3 paths (${have.size}/3, missing ${missing})`;
+}
+function fuseT7(t) {
+  if (t7Lock(t) !== '') return;
+  const others = t7Partners(t);
+  t.t7 = { parts: [t.t6, ...others.map(o => o.t6)].sort((a, b) => a.path - b.path) };
+  t.t6 = null;
+  t.paths = [MAX_TIER, MAX_TIER, MAX_TIER];
+  absorb(t, others);
+  if (!isArea(TOWERS[t.type])) t.camo = true;
+  burst(t.x, t.y, '#a29bfe', 60, 240);
+  burst(t.x, t.y, '#ffe58a', 40, 200);
+  stars(t.x, t.y, 60, 260);
+  state.shake = Math.max(state.shake, 14);
+  addText(t.x, t.y - 30, 'TIER 7!!', '#d6a2ff', 2);
+  saveGame();
+  refreshUI(true);
+}
+const tierOf = t => t.t7 ? 7 : t.t6 ? 6 : Math.max(...t.paths);
+// Empower: a Tier 7 kid can keep buying +1% damage, speed or range for $10,000 each.
+const BOOST_COST = 10000, BOOST_STEP = 0.01;
+const BOOSTS = [
+  { key: 'dmg',   name: 'Damage', desc: 'hits harder' },
+  { key: 'speed', name: 'Speed',  desc: 'attacks faster' },
+  { key: 'range', name: 'Range',  desc: 'reaches farther' },
+];
+const boostCost = n => Math.round(BOOST_COST * costMult()) * n;
+const boostOf = (t, k) => (t.t7 && t.t7.boost && t.t7.boost[k]) || 0;
+function buyBoost(t, i, n = 1) {
+  if (!t.t7) return;
+  const b = BOOSTS[i], c = boostCost(n);
+  if (state.money < c) return;
+  state.money -= c;
+  t.spent += c;
+  t.t7.boost = t.t7.boost || { dmg: 0, speed: 0, range: 0 };
+  t.t7.boost[b.key] += n;
+  burst(t.x, t.y, PATH_COLORS[i], 12 + n, 90);
+  addText(t.x, t.y - 30, `+${n}% ${b.name}`, PATH_COLORS[i], 1);
+  saveGame();
+  refreshUI(true);
+}
+
 function towerStats(t) {
+  if (t.t7) {
+    const st = fuseStats(t.t7.parts.map(f => towerStats({ ...t, t7: null, t6: f })), T7_MULT);
+    const d = 1 + boostOf(t, 'dmg') * BOOST_STEP, sp = 1 + boostOf(t, 'speed') * BOOST_STEP, r = 1 + boostOf(t, 'range') * BOOST_STEP;
+    st.dmg *= d; st.poison *= d; st.knock *= d;
+    st.rate /= sp;
+    st.range *= r; st.splash *= r;
+    return st;
+  }
+  if (t.t6) return fuseStats(t.t6.parts.map(paths => towerStats({ ...t, t6: null, paths })), T6_MULT);
   const def = TOWERS[t.type], [a, b, c] = t.paths;
   return {
     // snipers already reach the whole map, so their third path buys critical hits instead
@@ -667,6 +895,8 @@ const pathCost = (t, i) => t.paths[i] >= MAX_TIER ? Infinity
 // Returns '' if path i can be upgraded, otherwise the reason it can't.
 function pathLock(t, i) {
   const p = t.paths;
+  if (t.t7) return 'Tier 7';
+  if (t.t6) return 'Tier 6';
   if (p[i] >= MAX_TIER) return 'Maxed';
   const others = p.filter((_, j) => j !== i);
   if (p[i] === 0 && others.filter(v => v > 0).length >= 2) return 'Locked: 2 paths already chosen';
@@ -710,7 +940,7 @@ function saveGame() {
     v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId,
     round: state.round, lives: state.lives, money: state.money, rr: state.rr, won: state.won, speed: state.speed,
     seen: [...state.seen],
-    towers: state.towers.map(t => ({ type: t.type, x: t.x, y: t.y, paths: t.paths, mode: t.mode, camo: t.camo, spent: t.spent, kills: t.kills })),
+    towers: state.towers.map(t => ({ type: t.type, x: t.x, y: t.y, paths: t.paths, mode: t.mode, camo: t.camo, spent: t.spent, kills: t.kills, t6: t.t6 || undefined, t7: t.t7 || undefined })),
     traps: state.traps.map(p => ({ x: p.x, y: p.y, dmg: p.dmg, splash: p.splash, tower: state.towers.indexOf(p.tower) })),
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { return false; }
@@ -744,6 +974,18 @@ function restoreGame(d) {
     t.camo = !!s.camo && !isArea(TOWERS[s.type]);
     t.spent = num(s.spent, t.spent);
     t.kills = num(s.kills, 0);
+    const readT6 = f => (f && [0, 1, 2].includes(f.path) && Array.isArray(f.parts) && f.parts.length === T6_COUNT)
+      ? { path: f.path, parts: f.parts.map(pp => [0, 1, 2].map(i => Math.max(0, Math.min(MAX_TIER, (Array.isArray(pp) && pp[i]) | 0)))) } : null;
+    if (s.t7 && Array.isArray(s.t7.parts)) {
+      const parts = s.t7.parts.map(readT6);
+      if (parts.every(Boolean) && new Set(parts.map(f => f.path)).size === 3 && ![0, 1, 2].some(i => t6Taken(t.type, i))) {
+        const bs = s.t7.boost || {}, cnt = v => Math.max(0, Number.isFinite(v) ? v | 0 : 0);
+        t.t7 = { parts, boost: { dmg: cnt(bs.dmg), speed: cnt(bs.speed), range: cnt(bs.range) } };
+      }
+    } else {
+      const f = readT6(s.t6);
+      if (f && !t6Taken(t.type, f.path)) t.t6 = f;
+    }
     state.towers.push(t);
   }
   for (const p of d.traps || []) {
@@ -1037,7 +1279,9 @@ function slurp(t, st) {
 // dot = damage over time: can't be dodged and doesn't flash the doctor.
 function damage(e, dmg, pierce, tower, dot = false) {
   if (!e.alive) return;
-  if (!dot && e.key === 'neuro' && Math.random() < 0.2) { addText(e.x, e.y - e.r - 4, 'MISS', '#ffffff', 0.6); return; }
+  // Tier 7 ignores armor and never misses
+  if (tower && tower.t7) pierce = true;
+  if (!dot && e.key === 'neuro' && !(tower && tower.t7) && Math.random() < 0.2) { addText(e.x, e.y - e.r - 4, 'MISS', '#ffffff', 0.6); return; }
   // pierce: true ignores all armor, a number 0..1 ignores that share of it
   if (e.frozenT > 0) dmg *= BRITTLE;
   const armor = pierce === true ? 0 : e.armor * (1 - (pierce || 0));
@@ -1188,8 +1432,8 @@ function update(dt) {
   // towers
   for (const t of state.towers) { t.pep = 0; t.pepCamo = false; }
   for (const o of state.towers) {
-    if (o.type !== 'orchard' || !o.paths[2]) continue;
-    const bonus = PEP_BONUS[o.paths[2]];
+    if (o.type !== 'orchard' || !(o.paths[2] || o.t6 || o.t7)) continue;
+    const bonus = towerStats(o).pep;
     for (const t of state.towers) {
       if (t.type === 'orchard' || Math.hypot(t.x - o.x, t.y - o.y) > PEP_RADIUS) continue;
       t.pep = Math.max(t.pep, bonus);
@@ -1522,6 +1766,35 @@ function drawTower(t) {
       ctx.fillStyle = '#ffe58a';
       for (let i = 0; i < 3; i++) { const a = now * 1.6 + i * 2.09; drawStar(t.x + Math.cos(a) * 24, t.y + 2 + Math.sin(a) * 24, 2.6, now * 4); }
     }
+    if (t.t7) {
+      // Tier 7: three counter-rotating rings in the path colors, plus a big pulsing aura
+      const pulse = 0.5 + 0.5 * Math.sin(now * 5);
+      ctx.globalAlpha = ga * (0.18 + 0.12 * pulse);
+      ctx.fillStyle = `hsl(${(now * 120) % 360}, 90%, 65%)`;
+      ctx.beginPath(); ctx.arc(t.x + 1, t.y + 2, 40 + pulse * 3, 0, 7); ctx.fill();
+      ctx.globalAlpha = ga * 0.95; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = PATH_COLORS[i]; ctx.setLineDash([10, 6]); ctx.lineDashOffset = (i % 2 ? 1 : -1) * now * 30;
+        ctx.beginPath(); ctx.arc(t.x + 1, t.y + 2, 27 + i * 5, 0, 7); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      for (let i = 0; i < 7; i++) {
+        const a = now * 1.5 + i * Math.PI * 2 / 7;
+        ctx.fillStyle = `hsl(${(now * 120 + i * 51) % 360}, 95%, 72%)`;
+        drawStar(t.x + 1 + Math.cos(a) * 40, t.y + 2 + Math.sin(a) * 40, 3.6, now * 6);
+      }
+    }
+    if (t.t6) {
+      // Tier 6: a color-cycling halo with five orbiting stars, one per fused kid
+      ctx.globalAlpha = ga * 0.9; ctx.lineWidth = 3;
+      ctx.strokeStyle = `hsl(${(now * 90) % 360}, 90%, 65%)`;
+      ctx.beginPath(); ctx.arc(t.x + 1, t.y + 2, 29 + Math.sin(now * 4) * 1.5, 0, 7); ctx.stroke();
+      for (let i = 0; i < T6_COUNT; i++) {
+        const a = -now * 1.2 + i * Math.PI * 2 / T6_COUNT;
+        ctx.fillStyle = `hsl(${(now * 90 + i * 72) % 360}, 90%, 70%)`;
+        drawStar(t.x + 1 + Math.cos(a) * 29, t.y + 2 + Math.sin(a) * 29, 3.2, now * 5);
+      }
+    }
     ctx.globalAlpha = ga;
   }
   if (t.type === 'twins') {
@@ -1645,12 +1918,15 @@ function drawTower(t) {
     }
   }
   if (top >= MAX_TIER && t.type !== 'orchard') {
-    // little gold crown on top of a maxed-out kid
+    // little gold crown on top of a maxed-out kid (bigger for Tier 6)
     const cx = t.x, cy = t.y - 13;
+    ctx.save();
+    if (t.t6 || t.t7) { const k = t.t7 ? 1.9 : 1.5; ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy - 2); }
     ctx.fillStyle = '#f6c343'; ctx.strokeStyle = '#9a6b00'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(cx - 6, cy + 3); ctx.lineTo(cx - 6, cy - 3); ctx.lineTo(cx - 3, cy); ctx.lineTo(cx, cy - 4);
     ctx.lineTo(cx + 3, cy); ctx.lineTo(cx + 6, cy - 3); ctx.lineTo(cx + 6, cy + 3); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(cx, cy + 0.5, 1.2, 0, 7); ctx.fill();
+    ctx.fillStyle = t.t7 ? `hsl(${(now * 120) % 360}, 90%, 60%)` : t.t6 ? '#a29bfe' : '#e74c3c'; ctx.beginPath(); ctx.arc(cx, cy + 0.5, 1.2, 0, 7); ctx.fill();
+    ctx.restore();
   }
   // upgrade pips under the kid, one dot per tier in that path's color
   const n = t.paths.reduce((s, v) => s + v, 0);
@@ -2089,7 +2365,7 @@ const shopEl = $('shop');
 for (const k in TOWERS) {
   const d = TOWERS[k];
   const b = document.createElement('button');
-  b.className = 'shopbtn'; b.dataset.type = k;
+  b.className = 'shopbtn'; b.dataset.type = k; b.title = d.name;
   b.style.setProperty('--kid', d.shirt);
   b.innerHTML = `<span class="txt"><span class="nm">${d.name}</span><span class="ct"><span class="price">$${d.cost}</span><span class="key">${d.key.toUpperCase()}</span></span></span>`;
   b.prepend(kidPortrait(k));
@@ -2139,7 +2415,8 @@ function refreshUI(force) {
     if (lastInfoKey !== 'none') { info.innerHTML = 'Click a kid on the map to upgrade, sell, or change targeting.'; lastInfoKey = 'none'; }
   } else {
     const key = [t.id, t.paths.join(''), t.mode, [0, 1, 2].map(i => state.money >= pathCost(t, i)).join(''),
-      sellValue(t), t.camo, state.money >= camoCost(t), t.pep, t.pepCamo].join('|');
+      sellValue(t), t.camo, state.money >= camoCost(t), t.pep, t.pepCamo, tierOf(t), t.t6 ? t7Lock(t) : [0, 1, 2].map(i => fuseLock(t, i)).join(','),
+      t.t7 ? BOOSTS.map(b => boostOf(t, b.key)).join(',') + [1, 10].map(n => state.money >= boostCost(n)).join(',') : ''].join('|');
     if (key !== lastInfoKey || force) {
       lastInfoKey = key;
       const def = TOWERS[t.type], st = towerStats(t);
@@ -2154,7 +2431,7 @@ function refreshUI(force) {
         if (st.crit) stats += `<p>${Math.round(st.crit * 100)}% chance of x${SNIPER_CRIT_MULT} critical hit</p>`;
         if (st.splash) stats += `<p>Splash radius ${Math.round(st.splash)}</p>`;
         if (st.slow) stats += `<p>Slows ${Math.round(st.slow * 100)}% for ${st.slowDur.toFixed(1)}s</p>`;
-        if (def.pierce) stats += `<p>Ignores armor</p>`;
+        if (def.pierce || t.t7) stats += `<p>Ignores armor</p>`;
         if (st.bounces) stats += `<p>Bounces to ${st.bounces} more doctor${st.bounces > 1 ? 's' : ''} (-15% each)</p>`;
         if (st.poison) stats += `<p>Rot ${st.poison.toFixed(1)}/s for ${st.poisonDur.toFixed(1)}s, ignores armor</p>`;
         if (st.maxPies) stats += `<p>Up to ${st.maxPies} pies out at once &middot; pies hit camo</p>`;
@@ -2182,17 +2459,36 @@ function refreshUI(force) {
           if (i === 2 && def.rampMax) preview += `, ramp x${st.rampMax} → x${ns.rampMax}`;
           if (i === 0 && def.freeze) preview += `, freeze ${st.freeze.toFixed(1)}s → ${ns.freeze.toFixed(1)}s`;
         }
-        const btn = lock
+        let btn = lock
           ? `<button disabled>${lock}</button>`
           : `<button data-act="up" data-path="${i}" ${state.money < cost ? 'disabled' : ''}>Tier ${tier + 1} &middot; $${cost} [${PATH_KEYS[i].toUpperCase()}]</button>`;
+        const fl = fuseLock(t, i);
+        if (fl === '') btn += `<button class="fuse" data-act="fuse" data-path="${i}">Fuse ${T6_COUNT} into Tier 6 [V]</button>`;
+        else if (fl) btn += `<div class="phint">${fl}</div>`;
         return `<div class="path p${i}"><div class="phead"><b>${PATH_NAMES[t.type][i]}</b><span class="pips">${pips}</span></div>` +
           `<div class="phint">${hints[i]}${preview ? ` &middot; <span class="prev">${preview}</span>` : ''}</div>${btn}</div>`;
       }).join('');
+      let fusedRow = '';
+      if (t.t6) {
+        const tl = t7Lock(t);
+        fusedRow = `<div class="path p${t.t6.path} t6"><div class="phead"><b>Tier 6 &middot; ${PATH_NAMES[t.type][t.t6.path]}</b></div>` +
+          `<div class="phint">Fused from ${T6_COUNT} kids (${t.t6.parts.map(pp => pp.join('-')).join(', ')}). All their stats combined, x${T6_MULT}.</div>` +
+          (tl === '' ? `<button class="fuse t7" data-act="fuse7">Fuse all 3 Tier 6 into Tier 7 [V]</button>` : `<div class="phint">${tl}</div>`) + `</div>`;
+      } else if (t.t7) {
+        fusedRow = `<div class="path t6 t7"><div class="phead"><b>Tier 7 &middot; all paths</b></div>` +
+          `<div class="phint">Fused from 3 Tier 6 kids (${t.t7.parts.map(f => PATH_NAMES[t.type][f.path]).join(', ')}). All their stats combined, x${T7_MULT}. ` +
+          `Sees camo, ignores armor, never misses.</div></div>` +
+          `<div class="path boost"><div class="phead"><b>Empower</b><span>$${boostCost(1).toLocaleString()} per +1%</span></div>` +
+          BOOSTS.map((b, i) => `<div class="brow p${i}"><span><b>${b.name}</b> +${boostOf(t, b.key)}%</span>` +
+            `<button data-act="boost" data-path="${i}" data-n="1" ${state.money < boostCost(1) ? 'disabled' : ''}>+1% [${PATH_KEYS[i].toUpperCase()}]</button>` +
+            `<button data-act="boost" data-path="${i}" data-n="10" ${state.money < boostCost(10) ? 'disabled' : ''}>+10%</button></div>`).join('') +
+          `</div>`;
+      }
       const modes = isArea(def) ? '' :
         `<div class="row">${['first', 'last', 'strong', 'close'].map(m => `<button class="mode ${t.mode === m ? 'on' : ''}" data-act="mode" data-mode="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>`;
-      info.innerHTML = `<h3>${def.name}<span>${t.paths.join('-')}</span></h3>${stats}` +
+      info.innerHTML = `<h3>${def.name}<span>${t.t7 ? 'Tier 7' : t.t6 ? 'Tier 6' : t.paths.join('-')}</span></h3>${stats}` +
         (t.type === 'orchard' ? '' : `<p>Knockouts: <b id="kills">${t.kills}</b></p>`) +
-        pathRows +
+        (t.t6 || t.t7 ? fusedRow : pathRows) +
         (state.diff.noSell ? `<div class="row"><button disabled>No selling in Surgery</button></div>`
           : `<div class="row"><button data-act="sell">Sell $${sellValue(t)} [S]</button></div>`) +
         (isArea(def) ? '' : `<div class="row">${t.camo ? '<p style="color:#81ecec;margin:0">Camo Goggles: can see War Medics</p>'
@@ -2208,6 +2504,9 @@ $('info').addEventListener('click', ev => {
   if (!b || !state || !state.selected) return;
   const t = state.selected;
   if (b.dataset.act === 'up') upgradeTower(t, +b.dataset.path);
+  else if (b.dataset.act === 'fuse') fuseTower(t, +b.dataset.path);
+  else if (b.dataset.act === 'fuse7') fuseT7(t);
+  else if (b.dataset.act === 'boost') buyBoost(t, +b.dataset.path, +b.dataset.n);
   else if (b.dataset.act === 'sell') sellTower(t);
   else if (b.dataset.act === 'camo') buyCamo(t);
   else if (b.dataset.act === 'mode') { t.mode = b.dataset.mode; saveGame(); refreshUI(true); }
@@ -2367,9 +2666,11 @@ window.addEventListener('keydown', ev => {
   if (k === 's' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); manualSave(); return; }
   if (state.menu || state.over) return;
   const pi = PATH_KEYS.indexOf(k);
-  if (pi >= 0 && state.selected) { upgradeTower(state.selected, pi); return; }
+  if (pi >= 0 && state.selected) { if (state.selected.t7) buyBoost(state.selected, pi); else upgradeTower(state.selected, pi); return; }
   if (k === 's' && state.selected) { sellTower(state.selected); return; }
   if (k === 'g' && state.selected) { buyCamo(state.selected); return; }
+  if (k === 'v' && state.selected && state.selected.t6) { fuseT7(state.selected); return; }
+  if (k === 'v' && state.selected) { const i = [0, 1, 2].find(j => fuseLock(state.selected, j) === ''); if (i !== undefined) fuseTower(state.selected, i); return; }
   if (k === 'm') { openGameMenu(); return; }
   for (const tk in TOWERS) if (TOWERS[tk].key === k) { selectPlacing(tk); return; }
 });
