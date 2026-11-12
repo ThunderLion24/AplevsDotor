@@ -128,7 +128,7 @@
   .card .resume { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 4px 0 2px; }
   .card .resume small { color: var(--muted); font-size: 12px; width: 100%; }
   label.auto { font-size: 12px; color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
-  #shop { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  #shop { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
   /* compact shop tiles in the bottom bar: portrait on top, name and price below */
   #shop .shopbtn {
     flex-direction: column; align-items: center; text-align: center; padding: 5px 3px 5px; gap: 2px; position: relative;
@@ -212,6 +212,8 @@
   .card p { color: var(--muted); font-size: 14px; line-height: 1.45; }
   .diffs { display: flex; gap: 8px; margin: 14px 0 6px; flex-wrap: wrap; }
   .diffs button { flex: 1; min-width: 130px; padding: 10px; border-top: 4px solid var(--lvl, #6b4a33); border-radius: 10px; }
+  .card .secret { margin-top: 8px; background: linear-gradient(180deg, #8e2b2b, #5e1a1a); border-color: #c0392b; }
+  #shop .shopbtn.locked .portrait { filter: grayscale(1) brightness(.6); }
   .diffs button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.1); }
   .diffs button[data-diff="super"] { --lvl: #74b9ff; }
   .diffs button[data-diff="easy"] { --lvl: #6ab04c; }
@@ -255,7 +257,7 @@
       <div id="overlay"></div>
     </div>
     <section id="shopbar">
-      <h2>Kids (towers)</h2>
+      <h2 id="shoptitle">Kids (towers)</h2>
       <div id="shop"></div>
       <div id="shopdesc">Pick a kid, then click the grass to place. Right-click or Esc cancels.</div>
     </section>
@@ -263,9 +265,9 @@
   <aside id="panel">
     <h1>Apple Attack</h1>
     <div class="stats">
-      <div>Round<b id="sRound">0</b></div>
-      <div>Lives<b id="sLives">0</b></div>
-      <div>Apples $<b id="sMoney">0</b></div>
+      <div><span id="lRound">Round</span><b id="sRound">0</b></div>
+      <div><span id="lLives">Lives</span><b id="sLives">0</b></div>
+      <div><span id="lMoney">Apples $</span><b id="sMoney">0</b></div>
     </div>
     <div id="sub"></div>
     <div class="controls">
@@ -320,6 +322,8 @@ const PEP_BONUS = [0, 0.05, 0.1, 0.15, 0.22, 0.3];        // orchard path 2
 const PEP_RADIUS = 130;
 const SNIPER_CRIT = [0, 0.1, 0.18, 0.27, 0.38, 0.5];      // sniper path 2: chance of a x3 critical hit
 const SNIPER_CRIT_MULT = 3;
+const JUICE_HASTE = [0.12, 0.17, 0.23, 0.3, 0.4, 0.55];    // juice box path 0: nearby kids attack faster
+const JUICE_REACH = [0, 0.05, 0.1, 0.15, 0.2, 0.28];      // juice box path 1: nearby kids reach farther
 const PATH_NAMES = {
   kid:     ['Bigger Apples',  'Quick Arm',    'Strong Throw'],
   sling:   ['Heavy Ammo',     'Rapid Reload', 'Eagle Eye'],
@@ -335,6 +339,9 @@ const PATH_NAMES = {
   boomer:  ['Heavy Boomerang','Quick Catch',  'Big Loop'],
   bees:    ['Angry Bees',     'Busy Hive',    'Big Swarm'],
   slushie: ['Brain Freeze',   'Quick Slurp',  'Cold Snap'],
+  cannon:  ['Iron Apples',    'Quick Fuse',   'Long Barrel'],
+  juggler: ['Heavy Apples',   'Fast Hands',   'Extra Apple'],
+  juice:   ['Sugar Boost',    'Big Gulp',     'Cooler Bag'],
 };
 const PATH_HINTS = {
   default: ['Hits harder', 'Throws faster', 'More range'],
@@ -346,6 +353,9 @@ const PATH_HINTS = {
   boomer:  ['Hits harder', 'Throws faster', 'More range + wider loop'],
   bees:    ['Stings harder', 'New bees sooner', 'Bigger hunting ground + 1 more bee per tier'],
   slushie: ['Longer freeze + more damage', 'Freezes more often', 'Wider freeze'],
+  cannon:  ['Hits harder', 'Fires faster', 'More range + bigger cannonball'],
+  juggler: ['Hits harder', 'Juggles faster', 'More range + 1 more apple per tier'],
+  juice:   ['Nearby kids attack faster', 'Nearby kids reach farther', 'Wider juice zone'],
   sling:   ['Hits harder', 'Reloads faster', 'Critical hits (x3 damage)'],
   orchard: ['More $ per round', '+10% round bonus per tier', 'Nearby kids hit harder (tier 5: they see camo)'],
 };
@@ -398,9 +408,17 @@ const TOWERS = {
              desc: 'Keeps a hive. Bees chase down doctors around the hive and sting them over and over. Bees can smell camo doctors.' },
   slushie: { name: 'Slushie Kid',   cost: 360, range: 80,  dmg: 2,  rate: 3.6,  speed: 0,   shirt: '#74b9ff', hair: '#2d3436', key: 'r', freeze: 1.1,
              desc: 'Brain freeze! Freezes every doctor nearby solid for a moment. Frozen doctors take +30% damage from everything. Bosses thaw fast. Hits camo too.' },
+  cannon:  { name: 'Cannon Kid',    cost: 380, range: 130, dmg: 22, rate: 2.0,  speed: 260, shirt: '#34495e', hair: '#c0392b', key: 't', roll: 9,
+             desc: 'Fires a huge apple that rolls straight through the crowd, flattening every doctor in its way.' },
+  juggler: { name: 'Juggler Kid',   cost: 340, range: 115, dmg: 5,  rate: 1.0,  speed: 450, shirt: '#e84393', hair: '#fdcb6e', key: 'y', shots: 3,
+             desc: 'Throws a handful of golden apples at once, each at a different doctor. Extra apples double up when there are fewer doctors.' },
+  juice:   { name: 'Juice Box Kid', cost: 500, range: 110, dmg: 0,  rate: 0,    speed: 0,   shirt: '#00b894', hair: '#6c5ce7', key: 'u', juice: true,
+             desc: 'Doesn\'t throw. Hands out apple juice so nearby kids attack faster (and reach farther with Big Gulp).' },
 };
 // Kids that don't aim at a single doctor: no camo goggles or targeting modes.
-const isArea = def => !!(def.trap || def.knock || def.income || def.hive || def.freeze);
+const isArea = def => !!(def.trap || def.knock || def.income || def.hive || def.freeze || def.juice);
+// Kids that never attack: they help other kids or earn money instead.
+const isSupport = def => !!(def.income || def.juice);
 
 // Doctors (enemies). hp/speed are base values; hp scales with round.
 const ENEMIES = {
@@ -420,18 +438,24 @@ const ENEMIES = {
                desc: 'Heavily armored and slowly regenerates.' },
   warmedic:  { name: 'War Medic',        intro: 35, hp: 700,   speed: 70, armor: 4,  reward: 30,  leak: 6,  r: 13, coat: '#556b2f', scrub: '#8f9779', camo: true,
                desc: 'CAMO. Kids can only target it with Camo Goggles. Basket splash still hurts it.' },
+  paramedic: { name: 'Paramedic',       intro: 45, hp: 1100,  speed: 70, armor: 4,  reward: 40,  leak: 7,  r: 13, coat: '#f39c12', scrub: '#2c3e50',
+               desc: 'Sprints at double speed for a moment every few seconds.' },
   head:      { name: 'Hospital Head',    intro: 40, hp: 7000,  speed: 34, armor: 8,  reward: 500, leak: 60, r: 22, coat: '#2d3436', scrub: '#dfe6e9', bossOnly: true,
                desc: 'BOSS. Summons Interns as it walks.' },
   director:  { name: 'Medical Director', intro: 50, hp: 14000, speed: 30, armor: 10, reward: 900, leak: 80, r: 24, coat: '#6d214f', scrub: '#f8c291', bossOnly: true,
                desc: 'BOSS. Summons Nurses and speeds up nearby doctors.' },
+  anesth:    { name: 'Anesthesiologist', intro: 55, hp: 1700,  speed: 60, armor: 7,  reward: 50,  leak: 9,  r: 14, coat: '#ffffff', scrub: '#8e44ad',
+               desc: 'Darts the nearest kid every few seconds and puts it to sleep for 2 seconds.' },
   surgeon:   { name: 'Surgeon',          intro: 60, hp: 2400,  speed: 88, armor: 10, reward: 60,  leak: 10, r: 14, coat: '#00b894', scrub: '#00b894',
                desc: 'Fast, armored, and speeds up further when hurt.' },
+  radiologist: { name: 'Radiologist',   intro: 70, hp: 3200,  speed: 62, armor: 11, reward: 80,  leak: 12, r: 15, coat: '#7f8c8d', scrub: '#2c3e50', lead: true,
+               desc: 'Lead apron: can\'t be slowed, frozen or shoved.' },
   neuro:     { name: 'Neuro-surgeon',    intro: 80, hp: 4200,  speed: 72, armor: 14, reward: 110, leak: 15, r: 15, coat: '#00cec9', scrub: '#006266',
                desc: 'Extremely armored. Dodges 20% of apples.' },
   hospital:  { name: 'The Hospital',     intro: 100, hp: 40000, speed: 18, armor: 16, reward: 5000, leak: 99999, r: 36, coat: '#ecf0f1', scrub: '#e74c3c', bossOnly: true,
                desc: 'FINAL BOSS. The building itself. Discharges doctors constantly and calls in the executives at half health. If it reaches the orchard, it\'s over.' },
 };
-const REGULARS = ['student', 'intern', 'junior', 'senior', 'chief', 'nurse', 'physician', 'warmedic', 'surgeon', 'neuro'];
+const REGULARS = ['student', 'intern', 'junior', 'senior', 'chief', 'nurse', 'physician', 'warmedic', 'paramedic', 'anesth', 'surgeon', 'radiologist', 'neuro'];
 const camoCost = t => Math.round(Math.max(100, Math.round(TOWERS[t.type].cost * 0.5)) * costMult());
 const regIntro = k => ENEMIES[k].regularFrom || ENEMIES[k].intro;
 
@@ -610,8 +634,9 @@ function newGame(diffKey, mapId = menuMap) {
     towers: [], enemies: [], projs: [], parts: [], texts: [], queue: [], pending: [], traps: [], bees: [], shake: 0,
     spawnT: 0, inWave: false, speed: 1, auto: $('chkAuto').checked, autoT: 0,
     selected: null, placing: null, over: false, won: false, paused: false, menu: false,
-    seen: new Set(),
+    seen: new Set(), reverse: false,
   };
+  buildShop();
   refreshLegend();
   refreshUI(true);
   updateSaveInfo();
@@ -659,7 +684,7 @@ function buildWave(r) {
 }
 
 function startWave() {
-  if (!state || state.inWave || state.over || state.menu) return;
+  if (!state || state.inWave || state.over || state.menu || state.reverse) return;
   state.round++;
   state.queue = buildWave(state.round);
   state.inWave = true;
@@ -678,6 +703,8 @@ function announceRound(r) {
   if (r === 100) lines.push(`<div class="new">FINAL BOSS: the Hospital itself is coming!</div>`);
   if (r === 35) lines.push(`<div>War Medics are camouflaged: give kids Camo Goggles to see them!</div>`);
   if (r === 30) lines.push(`<div class="new">Chief Residents now attack as regular doctors!</div>`);
+  if (r === 55) lines.push(`<div>Anesthesiologists put kids to sleep. Spread your kids out!</div>`);
+  if (r === 70) lines.push(`<div>Radiologists can't be slowed, frozen or shoved. Bring raw damage!</div>`);
   if (r === DOUBLING_ROUND + 1) lines.push(`<div class="new">From now on, doctors are twice as tough every round!</div>`);
   if (r > DOUBLING_ROUND) lines.push(`<div>Doctor toughness: x${fmtMult(freeplayMult(r))}</div>`);
   if (r === FIB_SPEED_ROUND + 1) lines.push(`<div class="new">Doctors now speed up every round, following the Fibonacci sequence!</div>`);
@@ -763,7 +790,8 @@ function fuseStats(list, mult) {
   }
   out.crit = Math.min(1, out.crit);
   out.slow = Math.min(0.9, out.slow);
-  for (const k of ['bounces', 'maxPies', 'maxBees']) out[k] = Math.round(out[k]);
+  out.haste = Math.min(1.5, out.haste);
+  for (const k of ['bounces', 'maxPies', 'maxBees', 'shots']) out[k] = Math.round(out[k]);
   return out;
 }
 // Is the Tier 6 spot for this kid type + path taken (by a Tier 6, or by a Tier 7 that holds all three)?
@@ -870,8 +898,9 @@ function towerStats(t) {
     // snipers already reach the whole map, so their third path buys critical hits instead
     dmg: def.dmg * POWER_DMG[a] * (def.sniper ? 1 : RANGE_DMG[c]) * (1 + (t.pep || 0)),
     crit: def.sniper ? SNIPER_CRIT[c] : 0,
-    range: def.range * RANGE_MULT[c],
-    rate: def.rate * SPEED_RATE[b],
+    // juice box kids nearby: attack faster (t.haste) and reach farther (t.reach)
+    range: def.range * RANGE_MULT[c] * (1 + (t.reach || 0)),
+    rate: def.rate * SPEED_RATE[b] / (1 + (t.haste || 0)),
     projSpeed: def.speed * (1 + 0.1 * c),
     splash: def.splash ? def.splash * (1 + 0.08 * a + 0.06 * c) : 0,
     slow: def.slow ? Math.min(0.8, def.slow + 0.06 * a) : 0,
@@ -888,6 +917,10 @@ function towerStats(t) {
     loop: def.boomerang ? 26 + 6 * c : 0,
     maxBees: def.hive ? def.maxBees + c : 0,
     freeze: def.freeze ? def.freeze * (1 + 0.2 * a) : 0,
+    roll: def.roll ? def.roll + 2 * c : 0,
+    shots: def.shots ? def.shots + c : 0,
+    haste: def.juice ? JUICE_HASTE[a] : 0,
+    reach: def.juice ? JUICE_REACH[b] : 0,
   };
 }
 const pathCost = (t, i) => t.paths[i] >= MAX_TIER ? Infinity
@@ -935,7 +968,7 @@ function makeTower(type, x, y) {
 // "ready to start round N+1". Anything bought during a round gets saved once that round ends.
 const SAVE_KEY = 'appleAttackSave', SAVE_VERSION = 1;
 function saveGame() {
-  if (!state || state.over || state.inWave) return false;
+  if (!state || state.over || state.inWave || state.reverse) return false;
   const data = {
     v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId,
     round: state.round, lives: state.lives, money: state.money, rr: state.rr, won: state.won, speed: state.speed,
@@ -964,7 +997,7 @@ function restoreGame(d) {
   state.money = num(d.money, state.money);
   state.rr = num(d.rr, 0) | 0;
   state.won = !!d.won;
-  state.speed = [1, 2, 3].includes(d.speed) ? d.speed : 1;
+  state.speed = SPEEDS.includes(d.speed) ? d.speed : 1;
   state.seen = new Set((d.seen || []).filter(k => ENEMIES[k]));
   for (const s of d.towers) {
     if (!TOWERS[s.type] || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
@@ -1004,6 +1037,7 @@ function updateSaveInfo() {
 }
 function manualSave() {
   if (!state || state.over || state.menu) return;
+  if (state.reverse) { showBanner('<div class="big">No saving on a Code Blue shift</div>', 1.6); return; }
   if (state.inWave) {
     showBanner('<div class="big">Round in progress</div><div>The game saves itself when this round ends.</div>', 2);
     return;
@@ -1085,12 +1119,31 @@ function fire(t, target, st) {
     damage(target, st.dmg * (crit ? SNIPER_CRIT_MULT : 1), true, t);
     return;
   }
-  state.projs.push({
-    x: sx, y: sy, sx, sy, target, tx: target.x, ty: target.y, speed: st.projSpeed, dmg: st.dmg,
-    tower: t, type: t.type, splash: st.splash, slow: st.slow, slowDur: st.slowDur, pierce: !!def.pierce,
-    bounces: st.bounces, poison: st.poison, poisonDur: st.poisonDur,
-    total: Math.hypot(target.x - sx, target.y - sy) || 1, spin: Math.random() * 6,
-  });
+  // Juggler Kid throws several apples, each at a different doctor (doubling up if there aren't enough)
+  const targets = def.shots ? findTargets(t, st.range, st.shots, target) : [target];
+  const n = def.shots ? st.shots : 1;
+  for (let i = 0; i < n; i++) {
+    const tg = targets[i % targets.length], jx = def.shots ? (Math.random() - 0.5) * 8 : 0, jy = def.shots ? (Math.random() - 0.5) * 8 : 0;
+    state.projs.push({
+      x: sx + jx, y: sy + jy, sx: sx + jx, sy: sy + jy, target: tg, tx: tg.x, ty: tg.y, speed: st.projSpeed * (def.shots ? 0.9 + Math.random() * 0.2 : 1), dmg: st.dmg,
+      tower: t, type: t.type, splash: st.splash, slow: st.slow, slowDur: st.slowDur, pierce: !!def.pierce,
+      bounces: st.bounces, poison: st.poison, poisonDur: st.poisonDur,
+      total: Math.hypot(tg.x - sx, tg.y - sy) || 1, spin: Math.random() * 6,
+    });
+  }
+}
+// Up to n different doctors in range, best first by the kid's targeting mode. `first` always leads.
+function findTargets(t, range, n, first) {
+  const list = [];
+  for (const e of state.enemies) {
+    if (!e.alive || e === first || (e.camo && !t.camo && !t.pepCamo)) continue;
+    const dist = Math.hypot(e.x - t.x, e.y - t.y);
+    if (dist > range + e.r * 0.5) continue;
+    const v = t.mode === 'last' ? -e.d : t.mode === 'strong' ? e.hp + (e.boss ? 1e9 : 0) : t.mode === 'close' ? -dist : e.d;
+    list.push([v, e]);
+  }
+  list.sort((a, b) => b[0] - a[0]);
+  return [first, ...list.slice(0, n - 1).map(x => x[1])];
 }
 
 // Bouncy Kid: after a hit, send the apple on to the nearest doctor it hasn't hit yet.
@@ -1169,7 +1222,7 @@ function ringBell(t, st) {
   t.cd = st.rate; t.throwT = 0.3;
   for (const e of hits) {
     damage(e, st.dmg, false, t);
-    if (!e.alive || e.knockT > 0 || e.key === 'hospital') continue;
+    if (!e.alive || e.knockT > 0 || e.key === 'hospital' || e.def.lead) continue;
     e.d = Math.max(0, e.d - st.knock * (e.boss ? BOSS_KNOCK : 1));
     e.knockT = KNOCK_IMMUNE;
     const p = posAt(CUR.routes[e.route], e.d);
@@ -1222,6 +1275,56 @@ function updateBoomerang(p, dt) {
   }
 }
 
+// Cannon Kid: a big apple rolls in a straight line past the target, hitting each doctor it touches once.
+function fireCannon(t, target, st) {
+  const ang = Math.atan2(target.y - t.y, target.x - t.x), dx = Math.cos(ang), dy = Math.sin(ang);
+  const sx = t.x + dx * 16, sy = t.y + dy * 16;
+  state.projs.push({ type: 'cannon', tower: t, dmg: st.dmg, speed: st.projSpeed, size: st.roll, x: sx, y: sy, dx, dy,
+    left: st.range + 40, hit: new Set(), spin: 0 });
+  burst(sx, sy, '#bdc3c7', 6, 70);
+}
+function updateCannon(p, dt) {
+  const step = p.speed * dt;
+  p.x += p.dx * step; p.y += p.dy * step; p.left -= step; p.spin += step / p.size;
+  const t = p.tower;
+  for (const e of state.enemies) {
+    if (!e.alive || p.hit.has(e.id) || (e.camo && !t.camo && !t.pepCamo)) continue;
+    if (Math.hypot(e.x - p.x, e.y - p.y) < e.r + p.size) { p.hit.add(e.id); damage(e, p.dmg, false, t); burst(e.x, e.y, '#e74c3c', 4, 70); }
+  }
+  if (p.left <= 0 || p.x < -20 || p.y < -20 || p.x > W + 20 || p.y > H + 20) { p.done = true; burst(p.x, p.y, '#e74c3c', 8, 80); }
+}
+
+// Juice Box Kid: nearby kids (not orchards or other juice kids) attack faster and reach farther.
+function applyJuice() {
+  for (const t of state.towers) { t.haste = 0; t.reach = 0; }
+  for (const o of state.towers) {
+    if (o.type !== 'juice') continue;
+    const st = towerStats(o);
+    for (const t of state.towers) {
+      if (isSupport(TOWERS[t.type]) || Math.hypot(t.x - o.x, t.y - o.y) > st.range) continue;
+      t.haste = Math.max(t.haste, st.haste);
+      t.reach = Math.max(t.reach, st.reach);
+    }
+  }
+}
+
+// Anesthesiologist: darts the nearest attacking kid and puts it to sleep.
+const SLEEP_RANGE = 130, SLEEP_TIME = 2;
+function dartKid(e) {
+  let best = null, bd = SLEEP_RANGE;
+  for (const t of state.towers) {
+    if (isSupport(TOWERS[t.type]) || t.sleepT > 0) continue;
+    const d = Math.hypot(t.x - e.x, t.y - e.y);
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (!best) return false;
+  best.sleepT = SLEEP_TIME;
+  best.beamT = 0; best.beamTarget = null;
+  state.parts.push({ x: e.x, y: e.y, x2: best.x, y2: best.y, vx: 0, vy: 0, life: 0.2, max: 0.2, color: 'tracer', size: 1.5 });
+  addText(best.x, best.y - 24, 'Zzz', '#a29bfe', 1);
+  return true;
+}
+
 // Beekeeper: the hive releases bees that hunt doctors near the hive.
 const BEE_SPEED = 170, BEE_LIFE = 9, BEE_STING_EVERY = 0.45;
 function tendHive(t, st) {
@@ -1268,7 +1371,7 @@ function slurp(t, st) {
   t.cd = st.rate; t.throwT = 0.3;
   for (const e of hits) {
     damage(e, st.dmg, false, t);
-    if (!e.alive || e.freezeImm > 0 || e.key === 'hospital') continue;
+    if (!e.alive || e.freezeImm > 0 || e.key === 'hospital' || e.def.lead) continue;
     e.frozenT = st.freeze * (e.boss ? BOSS_FREEZE : 1);
     e.freezeImm = e.frozenT + FREEZE_IMMUNE;
   }
@@ -1290,7 +1393,7 @@ function damage(e, dmg, pierce, tower, dot = false) {
   if (!dot) e.hitT = 0.08;
   if (e.hp <= 0) {
     e.alive = false;
-    state.money += e.reward;
+    if (state.reverse) state.kidMoney += e.reward; else state.money += e.reward;
     if (tower) tower.kills++;
     addText(e.x, e.y - e.r, `+$${e.reward}`, '#f6c343', 0.9);
     burst(e.x, e.y, '#e74c3c', e.boss ? 40 : 12, e.boss ? 160 : 90);
@@ -1303,6 +1406,7 @@ function damage(e, dmg, pierce, tower, dot = false) {
 }
 
 function applySlow(e, slow, dur) {
+  if (e.def.lead) return;
   const f = 1 - (e.boss ? slow * 0.5 : slow);
   if (e.slowT <= 0 || f < e.slowF) e.slowF = f;
   e.slowT = Math.max(e.slowT, dur);
@@ -1340,10 +1444,11 @@ function update(dt) {
       } else if (item.boss) showBanner(`<div class="big">BOSS: ${ENEMIES[item.key].name}</div>`, 2);
       state.spawnT += state.queue.length ? state.queue[0].delay : 0;
     }
-  } else if (state.auto && state.autoT > 0) {
+  } else if (state.auto && state.autoT > 0 && !state.reverse) {
     state.autoT -= dt;
     if (state.autoT <= 0) startWave();
   }
+  if (state.reverse) { shiftTick(dt); if (state.over) return; }
 
   // director aura
   for (const e of state.enemies) e.aura = false;
@@ -1358,6 +1463,10 @@ function update(dt) {
     let spd = e.def.speed * e.spdMult;
     if (e.key === 'surgeon' && e.hp < e.maxHp * 0.5) spd *= 1.4;
     if (e.aura) spd *= 1.25;
+    if (e.dashT > 0) {
+      e.dashT -= dt; spd *= 2;
+      if (Math.random() < 0.25) burst(e.x, e.y, '#d2ae74', 1, 30);
+    }
     if (e.slowT > 0) { e.slowT -= dt; spd *= e.slowF; }
     if (e.knockT > 0) e.knockT -= dt;
     if (e.freezeImm > 0) e.freezeImm -= dt;
@@ -1389,6 +1498,12 @@ function update(dt) {
           if (healed) addText(e.x, e.y - e.r - 6, '+heal', '#55efc4', 0.7);
           e.abilT = 3; break;
         }
+        case 'paramedic':
+          e.dashT = 0.9;
+          addText(e.x, e.y - e.r - 6, 'Sprint!', '#f39c12', 0.6);
+          e.abilT = 3.5 + Math.random(); break;
+        case 'anesth':
+          e.abilT = dartKid(e) ? 5 : 0.5; break;
         case 'head':
           for (let i = 0; i < 2; i++) spawnEnemy('intern', false, Math.max(0, e.d - 15 - i * 18), true, e.route);
           addText(e.x, e.y - e.r - 8, 'Interns!', '#ffeaa7', 0.9);
@@ -1405,7 +1520,7 @@ function update(dt) {
           } else e.abilT = 1e9;
           break;
         case 'hospital': {
-          const pool = ['nurse', 'physician', 'surgeon', 'neuro', 'chief', 'warmedic'];
+          const pool = ['nurse', 'physician', 'surgeon', 'neuro', 'chief', 'warmedic', 'paramedic', 'anesth', 'radiologist'];
           for (let i = 0; i < 3; i++) spawnEnemy(pool[Math.floor(Math.random() * pool.length)], false, Math.max(0, e.d - 30 - i * 20), true, e.route);
           addText(e.x, e.y - e.r - 18, 'Discharging staff!', '#ff7675', 1);
           e.abilT = 5; break;
@@ -1423,6 +1538,7 @@ function update(dt) {
     if (e.d >= CUR.routes[e.route].len) {
       e.alive = false;
       state.lives -= e.leak;
+      if (state.reverse) { const pay = e.leak * REV_LEAK_PAY; state.money += pay; addText(e.x, e.y - 20, `+$${pay}`, '#f6c343', 1); }
       if (isFinite(state.lives)) addText(W - 40, 80, `-${e.leak} lives`, '#ff7675', 1.2);
       if (state.lives <= 0) { state.lives = 0; gameOver(); return; }
     }
@@ -1440,9 +1556,11 @@ function update(dt) {
       if (o.paths[2] >= MAX_TIER) t.pepCamo = true;
     }
   }
+  applyJuice();
   for (const t of state.towers) {
     if (t.throwT > 0) t.throwT -= dt;
-    if (t.type === 'orchard') continue;
+    if (isSupport(TOWERS[t.type])) continue;
+    if (t.sleepT > 0) { t.sleepT -= dt; continue; }
     t.cd -= dt;
     const st = towerStats(t);
     if (TOWERS[t.type].trap) { bakePie(t, st); continue; }
@@ -1454,7 +1572,9 @@ function update(dt) {
     if (target) {
       t.angle = Math.atan2(target.y - t.y, target.x - t.x);
       if (t.cd <= 0) {
-        if (TOWERS[t.type].boomerang) throwBoomerang(t, target, st); else fire(t, target, st);
+        if (TOWERS[t.type].boomerang) throwBoomerang(t, target, st);
+        else if (TOWERS[t.type].roll) fireCannon(t, target, st);
+        else fire(t, target, st);
         t.cd = st.rate; t.throwT = 0.14;
       }
     }
@@ -1465,6 +1585,7 @@ function update(dt) {
   // projectiles
   for (const p of state.projs) {
     if (p.type === 'boomer') { updateBoomerang(p, dt); continue; }
+    if (p.type === 'cannon') { updateCannon(p, dt); continue; }
     // short trail of recent positions for the motion streak
     (p.trail || (p.trail = [])).push(p.x, p.y);
     if (p.trail.length > 12) p.trail.splice(0, 2);
@@ -1511,7 +1632,7 @@ function impact(p) {
     damage(p.target, p.dmg, p.pierce, p.tower);
     if (p.slow && p.target.alive) applySlow(p.target, p.slow, p.slowDur);
     if (p.poison && p.target.alive) applyPoison(p.target, p.poison, p.poisonDur, p.tower);
-    const col = { twins: '#8bc34a', caramel: '#b9770e', rotten: '#6a8a3a', bouncer: '#ff9f43' }[p.type] || '#e74c3c';
+    const col = { twins: '#8bc34a', caramel: '#b9770e', rotten: '#6a8a3a', bouncer: '#ff9f43', juggler: '#f6c343' }[p.type] || '#e74c3c';
     burst(p.tx, p.ty, col, 4, 60);
     if (p.bounces > 0) bounce(p);
   } else {
@@ -1521,6 +1642,7 @@ function impact(p) {
 }
 
 function gameOver() {
+  if (state.reverse) { endShift(true); return; }
   state.over = true;
   state.inWave = false;
   saveBest(state.round - 1);
@@ -1534,7 +1656,7 @@ function gameOver() {
 // ======================= PERSISTENCE =======================
 function getBest() { try { return JSON.parse(localStorage.getItem('appleAttackBest') || '{}'); } catch (e) { return {}; } }
 function saveBest(r) {
-  if (state.diff.sandbox) return;
+  if (state.diff.sandbox || state.reverse) return;
   try {
     const b = getBest();
     const k = `${state.mapId}:${state.diffKey}`;
@@ -1809,7 +1931,7 @@ function drawTower(t) {
     drawKid(t.x - 4, t.y + 6, Math.sin(performance.now() / 600 + t.id) * 0.6 + 0.3, def.shirt, def.hair, t.skin, 0, 0.8, null);
   } else {
     const HOLD = { caramel: '#b9770e', basket: null, pie: null, bell: null, bouncer: '#ff9f43', rotten: '#7d6b3a',
-                   hose: null, boomer: null, bees: null, slushie: null };
+                   hose: null, boomer: null, bees: null, slushie: null, cannon: null, juggler: '#f6c343', juice: null };
     const hold = t.type in HOLD ? HOLD[t.type] : '#e74c3c';
     if (t.type === 'hose') {
       // cider barrel behind the kid, hose running to the nozzle in hand
@@ -1821,6 +1943,23 @@ function drawTower(t) {
       ctx.fillStyle = '#8e5a2b'; ctx.beginPath(); ctx.arc(bx, by, 7, 0, 7); ctx.fill();
       ctx.strokeStyle = '#5d3a1a'; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(bx, by, 5, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.arc(bx, by, 2.6, 0, 7); ctx.stroke();
+    }
+    if (t.type === 'juice') {
+      // cooler full of juice boxes beside the kid
+      const cx = t.x + 11, cy = t.y + 9;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(cx - 6, cy - 3, 14, 11);
+      ctx.fillStyle = '#0984e3'; ctx.fillRect(cx - 7, cy - 5, 14, 11);
+      ctx.fillStyle = '#ecf0f1'; ctx.fillRect(cx - 7, cy - 5, 14, 3);
+      ctx.fillStyle = '#2d3436'; ctx.fillRect(cx - 3, cy - 7, 6, 2);
+    }
+    if (t.type === 'cannon') {
+      // stubby cannon on wooden wheels, aimed with the kid
+      ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle);
+      ctx.fillStyle = '#6b3e1e'; ctx.beginPath(); ctx.arc(4, -9, 4, 0, 7); ctx.arc(4, 9, 4, 0, 7); ctx.fill();
+      ctx.fillStyle = '#2d3436'; ctx.fillRect(2, -5.5, 22, 11);
+      ctx.fillStyle = '#4b5563'; ctx.fillRect(2, -5.5, 22, 3);
+      ctx.fillStyle = '#1e272e'; ctx.fillRect(22, -6.5, 4, 13);
+      ctx.restore();
     }
     if (t.type === 'bees') {
       // beehive beside the kid
@@ -1851,6 +1990,21 @@ function drawTower(t) {
       ctx.strokeStyle = '#8e5a2b'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(-6, 4); ctx.lineTo(0, -2); ctx.lineTo(6, 4); ctx.stroke();
       ctx.restore();
+    }
+    if (t.type === 'juice') {
+      // juice box with a straw in hand
+      ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle); ctx.translate(13, 11);
+      ctx.fillStyle = '#e74c3c'; ctx.fillRect(-3, -4, 6, 8);
+      ctx.fillStyle = '#ffeaa7'; ctx.fillRect(-3, -1, 6, 3);
+      ctx.strokeStyle = '#ecf0f1'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(1, -4); ctx.lineTo(3, -8); ctx.stroke();
+      ctx.restore();
+    }
+    if (t.type === 'juggler' && !(t.throwT > 0)) {
+      // three golden apples circling over the kid's head
+      for (let i = 0; i < 3; i++) {
+        const a = now * 5 + i * 2.09 + t.id;
+        drawApple(t.x + Math.cos(a) * 9, t.y - 12 + Math.sin(a) * 4, 2.6, '#f6c343', false);
+      }
     }
     if (t.type === 'slushie') {
       ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle); ctx.translate(13, 10);
@@ -1916,6 +2070,17 @@ function drawTower(t) {
       ctx.beginPath(); ctx.arc(6, -3, 2.3, 0, Math.PI * 2); ctx.arc(6, 3, 2.3, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+  }
+  if (t.sleepT > 0) {
+    // asleep: dim the kid and float a few Z's
+    ctx.fillStyle = 'rgba(40,30,80,0.3)'; ctx.beginPath(); ctx.arc(t.x + 1, t.y, 15, 0, 7); ctx.fill();
+    ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    for (let i = 0; i < 3; i++) {
+      const k = (now * 0.8 + i / 3) % 1;
+      ctx.globalAlpha = 1 - k; ctx.fillStyle = '#d6c8ff';
+      ctx.strokeText('z', t.x + 6 + k * 10, t.y - 14 - k * 16); ctx.fillText('z', t.x + 6 + k * 10, t.y - 14 - k * 16);
+    }
+    ctx.globalAlpha = 1;
   }
   if (top >= MAX_TIER && t.type !== 'orchard') {
     // little gold crown on top of a maxed-out kid (bigger for Tier 6)
@@ -2035,6 +2200,8 @@ function drawDoctor(e) {
   ctx.fillStyle = '#2d3436';
   ctx.beginPath(); ctx.ellipse(sw, r * 0.4, r * 0.28, r * 0.18, 0, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(-sw, -r * 0.4, r * 0.28, r * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+  // paramedic's red kit bag on the back
+  if (e.key === 'paramedic') { ctx.fillStyle = '#c0392b'; ctx.fillRect(-r * 0.95, -r * 0.45, r * 0.42, r * 0.9); ctx.fillStyle = '#fff'; ctx.fillRect(-r * 0.82, -r * 0.08, r * 0.16, r * 0.16); }
   // student backpack
   if (e.key === 'student') { ctx.fillStyle = '#e17055'; ctx.fillRect(-r * 0.95, -r * 0.5, r * 0.45, r); }
   // body / coat
@@ -2044,6 +2211,13 @@ function drawDoctor(e) {
   // scrubs / shirt peeking at front
   ctx.fillStyle = def.scrub;
   ctx.beginPath(); ctx.moveTo(r * 0.15, -r * 0.45); ctx.lineTo(r * 0.68, 0); ctx.lineTo(r * 0.15, r * 0.45); ctx.closePath(); ctx.fill();
+  // paramedic hi-vis stripe, radiologist lead apron with a radiation badge
+  if (e.key === 'paramedic') { ctx.fillStyle = '#ecf0f1'; ctx.fillRect(-r * 0.1, -r * 0.95, r * 0.22, r * 1.9); }
+  if (e.key === 'radiologist') {
+    ctx.fillStyle = '#4b5563'; ctx.beginPath(); ctx.ellipse(r * 0.1, 0, r * 0.55, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(r * 0.3, -r * 0.4, r * 0.16, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2d3436'; ctx.beginPath(); ctx.arc(r * 0.3, -r * 0.4, r * 0.05, 0, 7); ctx.fill();
+  }
   // tie for execs
   if (e.key === 'head' || e.key === 'director') {
     ctx.fillStyle = e.key === 'head' ? '#d63031' : '#fdcb6e';
@@ -2058,6 +2232,12 @@ function drawDoctor(e) {
   if (e.key === 'director' || e.key === 'physician') { ctx.fillStyle = '#b2bec3'; ctx.fillRect(r * 0.45, -r * 1.05, r * 0.45, r * 0.55); ctx.fillStyle = '#fff'; ctx.fillRect(r * 0.5, -r * 1.0, r * 0.35, r * 0.45); }
   if (e.key === 'head') { ctx.fillStyle = '#6d4c41'; ctx.fillRect(r * 0.3, r * 0.75, r * 0.6, r * 0.4); }
   if (e.key === 'surgeon' || e.key === 'neuro') { ctx.fillStyle = '#dfe6e9'; ctx.fillRect(r * 0.6, r * 0.7, r * 0.5, r * 0.12); }
+  if (e.key === 'anesth') {
+    // dart syringe
+    ctx.fillStyle = '#dfe6e9'; ctx.fillRect(r * 0.5, r * 0.72, r * 0.6, r * 0.18);
+    ctx.fillStyle = '#a29bfe'; ctx.fillRect(r * 0.6, r * 0.75, r * 0.3, r * 0.12);
+    ctx.strokeStyle = '#636e72'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(r * 1.1, r * 0.81); ctx.lineTo(r * 1.4, r * 0.81); ctx.stroke();
+  }
   if (e.key === 'warmedic') {
     ctx.fillStyle = '#3b4a1f';
     ctx.beginPath(); ctx.arc(-r * 0.3, r * 0.45, r * 0.22, 0, 7); ctx.arc(-r * 0.1, -r * 0.55, r * 0.2, 0, 7); ctx.arc(r * 0.3, r * 0.6, r * 0.15, 0, 7); ctx.fill();
@@ -2081,8 +2261,8 @@ function drawDoctor(e) {
     ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#3b4a1f';
     ctx.beginPath(); ctx.arc(-r * 0.15, -r * 0.15, r * 0.15, 0, 7); ctx.arc(r * 0.12, r * 0.2, r * 0.12, 0, 7); ctx.fill();
-  } else if (e.key === 'surgeon' || e.key === 'neuro') {
-    ctx.fillStyle = e.key === 'neuro' ? '#0a3d62' : '#55efc4';
+  } else if (e.key === 'surgeon' || e.key === 'neuro' || e.key === 'anesth') {
+    ctx.fillStyle = e.key === 'neuro' ? '#0a3d62' : e.key === 'anesth' ? '#8e44ad' : '#55efc4';
     ctx.beginPath(); ctx.arc(0, 0, r * 0.47, Math.PI * 0.35, Math.PI * 1.65); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#81ecec'; ctx.fillRect(r * 0.32, -r * 0.3, r * 0.2, r * 0.6);
     if (e.key === 'neuro') {
@@ -2123,6 +2303,7 @@ function drawDoctor(e) {
     ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.6); ctx.lineTo(-r * 0.1, -r * 0.2); ctx.moveTo(r * 0.2, r * 0.3); ctx.lineTo(r * 0.45, r * 0.55); ctx.stroke();
   }
   ctx.restore();
+  if (e.noBar) { ctx.globalAlpha = 1; return; }
 
   // health bar
   const bw = Math.max(22, r * 2.2), bh = e.boss ? 5 : 4, by = e.y - r - (e.boss ? 14 : 9);
@@ -2138,7 +2319,7 @@ function drawDoctor(e) {
   ctx.globalAlpha = 1;
 }
 
-const TRAIL_RGB = { kid: '231,76,60', twins: '139,195,74', caramel: '185,119,14', rotten: '125,107,58', bouncer: '255,159,67' };
+const TRAIL_RGB = { kid: '231,76,60', twins: '139,195,74', caramel: '185,119,14', rotten: '125,107,58', bouncer: '255,159,67', juggler: '246,195,67' };
 function drawProj(p) {
   if (p.trail && TRAIL_RGB[p.type]) {
     for (let i = 0; i < p.trail.length; i += 2) {
@@ -2177,6 +2358,15 @@ function drawProj(p) {
       drawApple(p.x, p.y, 3.6, '#c0392b', false);
       break;
     }
+    case 'cannon': {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(p.x + 3, p.y + p.size * 0.6, p.size, p.size * 0.5, 0, 0, 7); ctx.fill();
+      drawApple(p.x, p.y, p.size, '#c0392b', false);
+      // a spinning stripe so it reads as rolling
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 0.65, p.spin, p.spin + 1.4); ctx.stroke();
+      break;
+    }
+    case 'juggler': drawApple(p.x, p.y, 3.4, '#f6c343', false); break;
     case 'twins': drawApple(p.x, p.y, 3, '#8bc34a', false); break;
     case 'bouncer': drawApple(p.x, p.y, 3.4, '#ff9f43', false); break;
     case 'rotten':
@@ -2287,6 +2477,16 @@ function render() {
   for (const e of enemiesSorted) drawDoctor(e);
   // hospitals are drawn over the doctors so they appear to walk out of the doors
   CUR.buildings.forEach((b, i) => drawBuilding(ctx, b, state.hospitalAwake === i));
+  if (state.reverse) {
+    // Code Blue: the hospital you're sending doctors from
+    const b = CUR.buildings[state.lane], pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
+    ctx.strokeStyle = `rgba(246,195,67,${0.6 + 0.4 * pulse})`; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); ctx.lineDashOffset = -performance.now() / 40;
+    ctx.strokeRect(b.x - 6, b.y - 8, b.w + 12, b.h + 14); ctx.setLineDash([]);
+    ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    const ty = b.y + b.h + 18 > H - 4 ? b.y - 14 : b.y + b.h + 18;
+    const tx = Math.max(30, Math.min(W - 30, b.cx));
+    ctx.strokeText('SENDING', tx, ty); ctx.fillStyle = '#f6c343'; ctx.fillText('SENDING', tx, ty);
+  }
   for (const t of state.towers) if (t.type === 'hose') drawStream(t);
   for (const p of state.projs) drawProj(p);
   for (const b of state.bees) drawBee(b);
@@ -2362,20 +2562,34 @@ function render() {
 
 // ======================= UI =======================
 const shopEl = $('shop');
-for (const k in TOWERS) {
-  const d = TOWERS[k];
-  const b = document.createElement('button');
-  b.className = 'shopbtn'; b.dataset.type = k; b.title = d.name;
-  b.style.setProperty('--kid', d.shirt);
-  b.innerHTML = `<span class="txt"><span class="nm">${d.name}</span><span class="ct"><span class="price">$${d.cost}</span><span class="key">${d.key.toUpperCase()}</span></span></span>`;
-  b.prepend(kidPortrait(k));
-  b.addEventListener('click', () => selectPlacing(k));
-  b.addEventListener('mouseenter', () => { $('shopdesc').textContent = d.desc; });
-  shopEl.appendChild(b);
+let shopMode = null;
+// The bottom bar sells kids normally, and doctors on a Code Blue shift.
+function buildShop() {
+  const mode = state && state.reverse ? 'docs' : 'kids';
+  if (mode === shopMode) return;
+  shopMode = mode;
+  shopEl.innerHTML = '';
+  $('shoptitle').textContent = mode === 'docs' ? 'Doctors (send them!)' : 'Kids (towers)';
+  $('shopdesc').textContent = mode === 'docs' ? 'Click a doctor (or press its key) to send it from the glowing hospital. Click a hospital or press L to switch lanes.'
+    : 'Pick a kid, then click the grass to place. Right-click or Esc cancels.';
+  const items = mode === 'docs' ? REV_DOCS.map((k, i) => [k, ENEMIES[k].name, REV_COST[k], REV_KEYS[i], ENEMIES[k].scrub, ENEMIES[k].desc])
+    : Object.keys(TOWERS).map(k => [k, TOWERS[k].name, TOWERS[k].cost, TOWERS[k].key, TOWERS[k].shirt, TOWERS[k].desc]);
+  for (const [k, name, cost, key, color, desc] of items) {
+    const b = document.createElement('button');
+    b.className = 'shopbtn'; b.dataset.type = k; b.title = name;
+    b.style.setProperty('--kid', color);
+    b.innerHTML = `<span class="txt"><span class="nm">${name}</span><span class="ct"><span class="price">$${cost}</span><span class="key">${key.toUpperCase()}</span></span></span>`;
+    b.prepend(mode === 'docs' ? doctorPortrait(k) : kidPortrait(k));
+    b.addEventListener('click', () => (mode === 'docs' ? sendDoctor(k) : selectPlacing(k)));
+    b.addEventListener('mouseenter', () => {
+      $('shopdesc').textContent = mode === 'docs' ? `${desc} Unlocks at shift level ${ENEMIES[k].intro}. Leaks ${ENEMIES[k].leak} ${ENEMIES[k].leak === 1 ? 'life' : 'lives'}.` : desc;
+    });
+    shopEl.appendChild(b);
+  }
 }
 
 function selectPlacing(k) {
-  if (!state || state.over || state.menu) return;
+  if (!state || state.over || state.menu || state.reverse) return;
   state.placing = state.placing === k ? null : k;
   state.selected = null;
   if (state.placing) $('shopdesc').textContent = TOWERS[k].desc;
@@ -2385,6 +2599,8 @@ function selectPlacing(k) {
 let lastInfoKey = '';
 function refreshUI(force) {
   if (!state) return;
+  if (state.reverse) { refreshShiftUI(force); return; }
+  $('lRound').textContent = 'Round'; $('lLives').textContent = 'Lives'; $('lMoney').textContent = 'Apples $';
   $('sRound').textContent = state.round;
   $('sLives').textContent = fmtCount(state.lives);
   $('sMoney').textContent = fmtCount(Math.floor(state.money));
@@ -2415,7 +2631,7 @@ function refreshUI(force) {
     if (lastInfoKey !== 'none') { info.innerHTML = 'Click a kid on the map to upgrade, sell, or change targeting.'; lastInfoKey = 'none'; }
   } else {
     const key = [t.id, t.paths.join(''), t.mode, [0, 1, 2].map(i => state.money >= pathCost(t, i)).join(''),
-      sellValue(t), t.camo, state.money >= camoCost(t), t.pep, t.pepCamo, tierOf(t), t.t6 ? t7Lock(t) : [0, 1, 2].map(i => fuseLock(t, i)).join(','),
+      sellValue(t), t.camo, state.money >= camoCost(t), t.pep, t.pepCamo, t.haste, t.reach, t.sleepT > 0, tierOf(t), t.t6 ? t7Lock(t) : [0, 1, 2].map(i => fuseLock(t, i)).join(','),
       t.t7 ? BOOSTS.map(b => boostOf(t, b.key)).join(',') + [1, 10].map(n => state.money >= boostCost(n)).join(',') : ''].join('|');
     if (key !== lastInfoKey || force) {
       lastInfoKey = key;
@@ -2425,6 +2641,11 @@ function refreshUI(force) {
         stats = `<p>Income: <b>$${st.income}</b> per round</p>`;
         if (st.market) stats += `<p>Market: +${Math.round(st.market * 100)}% of round bonus</p>`;
         if (st.pep) stats += `<p>Pep Talk: nearby kids +${Math.round(st.pep * 100)}% damage${t.paths[2] >= MAX_TIER ? ', see camo' : ''}</p>`;
+      }
+      else if (def.juice) {
+        stats = `<p>Nearby kids attack <b>+${Math.round(st.haste * 100)}%</b> faster</p>`;
+        if (st.reach) stats += `<p>Big Gulp: nearby kids +${Math.round(st.reach * 100)}% range</p>`;
+        stats += `<p>Juice zone radius ${Math.round(st.range)}</p>`;
       }
       else {
         stats = `<p>Damage <b>${st.dmg.toFixed(1)}</b> &middot; Range <b>${isFinite(st.range) ? Math.round(st.range) : 'whole map'}</b> &middot; Every <b>${st.rate.toFixed(2)}s</b></p>`;
@@ -2439,7 +2660,11 @@ function refreshUI(force) {
         if (st.rampMax) stats += `<p>Ramps up to x${st.rampMax} on the same doctor &middot; ignores half armor</p>`;
         if (st.loop) stats += `<p>Boomerang hits every doctor it passes, out and back</p>`;
         if (st.maxBees) stats += `<p>Up to ${st.maxBees} bees at once &middot; bees smell camo</p>`;
+        if (st.roll) stats += `<p>Cannonball rolls through every doctor in its path</p>`;
+        if (st.shots) stats += `<p>Throws ${st.shots} apples at once, each at a different doctor</p>`;
         if (st.freeze) stats += `<p>Freezes ${st.freeze.toFixed(1)}s (bosses ${Math.round(BOSS_FREEZE * 100)}%) &middot; frozen take +${Math.round((BRITTLE - 1) * 100)}% damage &middot; hits camo</p>`;
+        if (t.haste) stats += `<p style="color:#55efc4">Juice Box +${Math.round(t.haste * 100)}% attack speed${t.reach ? `, +${Math.round(t.reach * 100)}% range` : ''}</p>`;
+        if (t.sleepT > 0) stats += `<p style="color:#a29bfe">Asleep!</p>`;
         if (t.pep) stats += `<p style="color:#f6c343">Pep Talk +${Math.round(t.pep * 100)}% damage${t.pepCamo ? ', sees camo' : ''}</p>`;
       }
       const hints = PATH_HINTS[t.type] || PATH_HINTS.default;
@@ -2450,11 +2675,14 @@ function refreshUI(force) {
         if (!lock) {
           const ns = towerStats({ ...t, paths: t.paths.map((v, j) => j === i ? v + 1 : v) });
           if (t.type === 'orchard') preview = [`$${ns.income}/round`, `+${Math.round(ns.market * 100)}% bonus`, `+${Math.round(ns.pep * 100)}% dmg nearby`][i];
+          else if (def.juice) preview = [`+${Math.round(st.haste * 100)}% → +${Math.round(ns.haste * 100)}% speed`, `+${Math.round(st.reach * 100)}% → +${Math.round(ns.reach * 100)}% range`, `zone ${Math.round(st.range)} → ${Math.round(ns.range)}`][i];
           else preview = [`dmg ${st.dmg.toFixed(1)} → ${ns.dmg.toFixed(1)}`, `every ${st.rate.toFixed(2)}s → ${ns.rate.toFixed(2)}s`, def.sniper ? `crit ${Math.round(st.crit * 100)}% → ${Math.round(ns.crit * 100)}%` : `range ${Math.round(st.range)} → ${Math.round(ns.range)}`][i];
           if (i === 0 && def.poison) preview = `rot ${st.poison.toFixed(1)}/s → ${ns.poison.toFixed(1)}/s`;
           if (i === 0 && def.knock) preview += `, shove ${Math.round(st.knock)} → ${Math.round(ns.knock)}`;
           if (i === 2 && def.bounces) preview += `, bounces ${st.bounces} → ${ns.bounces}`;
           if (i === 2 && def.trap) preview += `, pies ${st.maxPies} → ${ns.maxPies}`;
+          if (i === 2 && def.shots) preview += `, apples ${st.shots} → ${ns.shots}`;
+          if (i === 2 && def.roll) preview += `, ball size ${st.roll} → ${ns.roll}`;
           if (i === 2 && def.hive) preview += `, bees ${st.maxBees} → ${ns.maxBees}`;
           if (i === 2 && def.rampMax) preview += `, ramp x${st.rampMax} → x${ns.rampMax}`;
           if (i === 0 && def.freeze) preview += `, freeze ${st.freeze.toFixed(1)}s → ${ns.freeze.toFixed(1)}s`;
@@ -2487,7 +2715,7 @@ function refreshUI(force) {
       const modes = isArea(def) ? '' :
         `<div class="row">${['first', 'last', 'strong', 'close'].map(m => `<button class="mode ${t.mode === m ? 'on' : ''}" data-act="mode" data-mode="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}</div>`;
       info.innerHTML = `<h3>${def.name}<span>${t.t7 ? 'Tier 7' : t.t6 ? 'Tier 6' : t.paths.join('-')}</span></h3>${stats}` +
-        (t.type === 'orchard' ? '' : `<p>Knockouts: <b id="kills">${t.kills}</b></p>`) +
+        (isSupport(def) ? '' : `<p>Knockouts: <b id="kills">${t.kills}</b></p>`) +
         (t.t6 || t.t7 ? fusedRow : pathRows) +
         (state.diff.noSell ? `<div class="row"><button disabled>No selling in Surgery</button></div>`
           : `<div class="row"><button data-act="sell">Sell $${sellValue(t)} [S]</button></div>`) +
@@ -2521,7 +2749,7 @@ function refreshLegend() {
     return `<div class="lg" title="${e.desc}"><span class="dot" style="background:${e.coat};border-color:${e.scrub}"></span>${e.name}<small>R${e.intro}${e.bossOnly ? ' boss' : ''}</small></div>`;
   }).join('');
   const upcoming = Object.keys(ENEMIES).filter(k => !state.seen.has(k)).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro)[0];
-  if (upcoming) html += `<div class="next">Next arrival: ${ENEMIES[upcoming].name} (round ${ENEMIES[upcoming].intro})</div>`;
+  if (upcoming && !state.reverse) html += `<div class="next">Next arrival: ${ENEMIES[upcoming].name} (round ${ENEMIES[upcoming].intro})</div>`;
   if (!keys.length && !upcoming) html = '';
   el.innerHTML = html;
 }
@@ -2557,12 +2785,13 @@ function showOverlay(kind) {
       <p class="mdesc"><b>${sel.name}:</b> ${sel.desc}</p>
       <h3 class="mh">2. Pick a difficulty to start</h3>
       <div class="diffs">${diffBtns}</div>
+      ${secretUnlocked() ? '<button class="bigbtn secret" data-act="reverse">Code Blue: play as the Hospital</button>' : ''}
       <ul>
-        <li>Buy kids (1-9, 0, Q-R), click grass to place them. Click a kid to upgrade it (Z/X/C), sell (S) or change targeting.</li>
+        <li>Buy kids (1-9, 0, Q-R, T-U), click grass to place them. Click a kid to upgrade it (Z/X/C), sell (S) or change targeting.</li>
         <li>Each kid has 3 upgrade paths (damage, speed, range) with 5 tiers. Pick two paths: one can go to tier 5, the other only to tier 2.</li>
         <li>Space starts the next round. F changes speed, P pauses.</li>
         <li>The game saves itself between rounds. Use Continue here to pick up where you left off.</li>
-        <li>New doctors arrive at rounds 1, 5, 10, 15, 20 (boss), 25, 30, 35, 40, 50, 60 and 80. At round ${WIN_ROUND} the Hospital itself attacks. Beat it to win, then keep going in Freeplay. After round ${DOUBLING_ROUND}, every round doubles in difficulty. After round ${FIB_SPEED_ROUND}, doctors also speed up every round, following the Fibonacci sequence.</li>
+        <li>New doctors arrive at rounds 1, 5, 10, 15, 20 (boss), 25, 30, 35, 40, 45, 50, 55, 60, 70 and 80. At round ${WIN_ROUND} the Hospital itself attacks. Beat it to win, then keep going in Freeplay. After round ${DOUBLING_ROUND}, every round doubles in difficulty. After round ${FIB_SPEED_ROUND}, doctors also speed up every round, following the Fibonacci sequence.</li>
         <li>Armor shrinks each hit. The Slingshot Sniper ignores armor and can hit doctors anywhere on the map.</li>
         <li>War Medics (round 35) are camouflaged. Only kids with Camo Goggles (G) can target them.</li>
       </ul></div>`;
@@ -2575,6 +2804,16 @@ function showOverlay(kind) {
       <p>You knocked down the Hospital itself and held off every doctor through round ${WIN_ROUND} on ${state.diff.name}.</p>
       <p>Freeplay lets you keep going forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty. How far can you get?</p>
       <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
+  }
+  else if (kind === 'shiftwin' || kind === 'shiftlose') {
+    const time = fmtTime(Math.min(state.revT, REV_SHIFT));
+    html = kind === 'shiftwin'
+      ? `<div class="card"><h2>Code Blue: the orchard has fallen!</h2>
+        <p>Your doctors stormed the orchard in <b>${time}</b>. The kids had ${state.towers.length} kid${state.towers.length === 1 ? '' : 's'} on the field and still couldn't stop you.</p>
+        <button class="bigbtn" data-act="reverse">Another shift</button><button class="bigbtn" data-act="menu">Main menu</button></div>`
+      : `<div class="card"><h2>Shift over: the kids held!</h2>
+        <p>The orchard survived with <b>${state.lives}</b> of ${REV_LIVES} lives left. The kids finished with ${state.towers.length} kid${state.towers.length === 1 ? '' : 's'} on the field.</p>
+        <button class="bigbtn" data-act="reverse">Try another shift</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   }
   overlay.innerHTML = html;
   for (const c of overlay.querySelectorAll('canvas[data-thumb]')) c.getContext('2d').drawImage(mapThumb(c.dataset.thumb), 0, 0, c.width, c.height);
@@ -2600,7 +2839,13 @@ overlay.addEventListener('click', ev => {
     const d = loadSave();
     if (d) { restoreGame(d); hideOverlay(); showBanner(`<div class="big">Welcome back!</div><div>Round ${state.round + 1} is ready when you are.</div>`, 2.5); }
   }
-  else if (b.dataset.diff) { newGame(b.dataset.diff, menuMap); hideOverlay(); showBanner('<div class="big">Place some kids!</div><div>Then press Start Round (Space).</div>', 3); refreshUI(true); }
+  else if (b.dataset.act === 'reverse') { startShift(); hideOverlay(); }
+  else if (b.dataset.diff) {
+    const secret = bumpSecret(menuMap);
+    if (secret === 'go') { startShift(true); hideOverlay(); return; }
+    newGame(b.dataset.diff, menuMap); hideOverlay();
+    if (secret === 'hint') { showBanner('<div class="big">The hospital lights flicker...</div>', 3); refreshUI(true); return; } showBanner('<div class="big">Place some kids!</div><div>Then press Start Round (Space).</div>', 3); refreshUI(true);
+  }
   else if (b.dataset.act === 'retry') { newGame(state.diffKey, state.mapId); hideOverlay(); refreshUI(true); }
   else if (b.dataset.act === 'menu') { menuFromGame = !state.over; showOverlay('menu'); }
   else if (b.dataset.act === 'continue') { hideOverlay(); showBanner(`<div class="big">Freeplay!</div><div>Go forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty.</div>`, 3); refreshUI(true); }
@@ -2627,8 +2872,198 @@ $('chkAuto').addEventListener('change', ev => {
   state.auto = ev.target.checked;
   if (state.auto && !state.inWave && state.round > 0) state.autoT = 1;
 });
-function cycleSpeed() { if (!state) return; state.speed = state.speed >= 3 ? 1 : state.speed + 1; refreshUI(true); }
+const SPEEDS = [1, 2, 3, 5, 10];
+function cycleSpeed() { if (!state) return; state.speed = SPEEDS[(SPEEDS.indexOf(state.speed) + 1) % SPEEDS.length]; refreshUI(true); }
 function togglePause() { if (!state || state.menu || state.over) return; state.paused = !state.paused; refreshUI(true); }
+
+// ======================= CODE BLUE (secret) =======================
+// Start a new game on the Insane map 5 times in a row (leaving to the menu in between) and the
+// tables turn: you're the Hospital sending doctors, and the computer runs the kids.
+const SECRET_KEY = 'appleAttackSecret', SECRET_MAP = 'four', SECRET_STARTS = 5;
+function secretUnlocked() { try { return localStorage.getItem(SECRET_KEY + 'On') === '1'; } catch (e) { return false; } }
+// Counts consecutive new games on the Insane map. 'go' on the 5th, 'hint' on the 4th.
+let secretCount = 0;
+function bumpSecret(mapId) {
+  try { secretCount = Number(localStorage.getItem(SECRET_KEY)) || 0; } catch (e) { /* storage unavailable: count in memory */ }
+  secretCount = mapId === SECRET_MAP ? secretCount + 1 : 0;
+  const go = secretCount >= SECRET_STARTS;
+  if (go) secretCount = 0;
+  try { localStorage.setItem(SECRET_KEY, String(secretCount)); if (go) localStorage.setItem(SECRET_KEY + 'On', '1'); } catch (e) { /* storage unavailable */ }
+  return go ? 'go' : secretCount === SECRET_STARTS - 1 ? 'hint' : '';
+}
+
+const REV_DOCS = ['student', 'intern', 'junior', 'senior', 'chief', 'nurse', 'physician', 'warmedic', 'paramedic', 'anesth', 'surgeon', 'radiologist', 'neuro', 'head', 'director'];
+const REV_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'q', 'w', 'e', 'r', 't'];
+const REV_COST = { student: 12, intern: 25, junior: 45, senior: 80, chief: 200, nurse: 130, physician: 280, warmedic: 240,
+  paramedic: 320, anesth: 420, surgeon: 600, radiologist: 750, neuro: 950, head: 3000, director: 5000 };
+const REV_SHIFT = 600;        // seconds in a shift
+const REV_LEVEL_EVERY = 7.5;  // seconds per shift level (doctors toughen up and unlock like rounds)
+const REV_LIVES = 150, REV_START_MONEY = 150, REV_LEAK_PAY = 4;
+const revIncome = lvl => 9 + 1.6 * lvl;  // hospital budget per second
+const fmtTime = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+const revUnlocked = k => ENEMIES[k].intro <= state.round;
+
+function startShift(first = false) {
+  newGame('normal', SECRET_MAP);
+  Object.assign(state, {
+    reverse: true, diff: { ...DIFFS.normal, name: 'Code Blue' }, lives: REV_LIVES, money: REV_START_MONEY, round: 1,
+    revT: 0, lane: 0, kidMoney: 1400, aiT: 1, kidIncomeT: 6, routePts: null,
+  });
+  buildShop();
+  // the kids start with a couple of defenders already out
+  for (const k of ['kid', 'kid', 'twins', 'basket']) aiPlace(k);
+  refreshUI(true);
+  showBanner(first ? '<div class="big">SECRET: Code Blue!</div><div class="new">You are the Hospital now. Send doctors and take the orchard!</div>'
+    : '<div class="big">Code Blue</div><div>Leak all the orchard\'s lives before the shift ends.</div>', 4);
+}
+
+function sendDoctor(k) {
+  if (!state || !state.reverse || state.over || state.menu || state.paused) return;
+  if (!revUnlocked(k) || state.money < REV_COST[k] || state.revT >= REV_SHIFT) return;
+  state.money -= REV_COST[k];
+  spawnEnemy(k, false, 0, false, state.lane);
+  const b = CUR.buildings[state.lane];
+  burst(b.cx, b.cy, ENEMIES[k].scrub, 8, 70);
+  refreshUI(true);
+}
+
+function shiftTick(dt) {
+  const before = state.round;
+  state.revT += dt;
+  if (state.revT < REV_SHIFT) state.money += revIncome(state.round) * dt;
+  state.round = Math.min(99, 1 + Math.floor(Math.min(state.revT, REV_SHIFT) / REV_LEVEL_EVERY));
+  if (state.round !== before) {
+    const fresh = REV_DOCS.filter(k => ENEMIES[k].intro > before && ENEMIES[k].intro <= state.round);
+    if (fresh.length) showBanner(`<div class="big">Shift level ${state.round}</div>${fresh.map(k => `<div class="new">NEW: ${ENEMIES[k].name} can be sent!</div>`).join('')}`, 3);
+  }
+  // the kids get a paycheck every few seconds and spend it
+  state.kidIncomeT -= dt;
+  if (state.kidIncomeT <= 0) { state.kidIncomeT = 6; state.kidMoney += 70 + 14 * state.round; }
+  state.aiT -= dt;
+  if (state.aiT <= 0) { state.aiT = 0.8; kidsThink(); }
+  // once the shift is over, whatever's still walking gets a last chance
+  if (state.revT >= REV_SHIFT && !state.enemies.length && !state.pending.length) endShift(false);
+}
+
+function endShift(won) {
+  if (state.over) return;
+  state.over = true;
+  state.lives = Math.max(0, state.lives);
+  showOverlay(won ? 'shiftwin' : 'shiftlose');
+  refreshUI(true);
+}
+
+// ---- the kids' AI ----
+const AI_TYPES = ['kid', 'sling', 'twins', 'basket', 'caramel', 'bouncer', 'rotten', 'pie', 'bell', 'hose', 'boomer', 'bees', 'slushie', 'cannon', 'juggler', 'juice'];
+function aiCost(type) { return TOWERS[type].cost; }
+// Best of a handful of random spots: covers the most path (or, for a juice kid, the most kids).
+function aiSpot(type) {
+  if (!state.routePts) { state.routePts = []; for (const r of CUR.routes) for (let d = 0; d < r.len; d += 20) state.routePts.push(posAt(r, d)); }
+  const def = TOWERS[type], range = isFinite(def.range) ? def.range : 0;
+  let best = null, bestS = -1;
+  for (let i = 0; i < 80; i++) {
+    const x = 20 + Math.random() * (W - 40), y = 20 + Math.random() * (H - 40);
+    if (!canPlace(x, y)) continue;
+    let sc = 0;
+    if (def.juice) for (const t of state.towers) { if (!isSupport(TOWERS[t.type]) && Math.hypot(t.x - x, t.y - y) <= range) sc++; }
+    else if (!range) sc = 1 + Math.random();
+    else for (const q of state.routePts) if (Math.hypot(q.x - x, q.y - y) <= range) sc++;
+    if (sc > bestS) { bestS = sc; best = { x, y }; }
+  }
+  return best;
+}
+function aiPlace(type) {
+  if (state.kidMoney < aiCost(type)) return false;
+  const p = aiSpot(type);
+  if (!p) return false;
+  const t = makeTower(type, p.x, p.y);
+  t.spent = aiCost(type);
+  // each kid gets an upgrade plan: one main path to tier 5, a second path to tier 2
+  const main = Math.floor(Math.random() * 3);
+  t.plan = [main, (main + 1 + Math.floor(Math.random() * 2)) % 3];
+  state.kidMoney -= aiCost(type);
+  state.towers.push(t);
+  burst(p.x, p.y, '#c8e6a0', 10, 60);
+  return true;
+}
+function aiUpgrade(t) {
+  const plan = t.plan || [0, 1];
+  const i = t.paths[plan[0]] < MAX_TIER ? plan[0] : t.paths[plan[1]] < SECOND_PATH_CAP ? plan[1] : -1;
+  if (i < 0 || pathLock(t, i)) return false;
+  const c = Math.round(TOWERS[t.type].cost * PATH_COST[t.paths[i]] * (i === 2 ? 0.85 : 1));
+  if (state.kidMoney < c) return false;
+  state.kidMoney -= c; t.spent += c; t.paths[i]++;
+  burst(t.x, t.y, PATH_COLORS[i], 10, 70);
+  if (t.paths[i] === MAX_TIER) stars(t.x, t.y, 16, 140);
+  return true;
+}
+function kidsThink() {
+  const attackers = state.towers.filter(t => !isSupport(TOWERS[t.type]));
+  // camo doctors on the field: hand out goggles
+  if (state.seen.has('warmedic') && attackers.filter(t => t.camo).length < 1 + Math.floor(attackers.length / 5)) {
+    const t = attackers.find(o => !o.camo && !isArea(TOWERS[o.type]));
+    const c = t && Math.max(100, Math.round(TOWERS[t.type].cost * 0.5));
+    if (t && state.kidMoney >= c) { state.kidMoney -= c; t.spent += c; t.camo = true; burst(t.x, t.y, '#81ecec', 10, 70); }
+  }
+  const want = Math.min(30, 6 + Math.floor(state.round / 3));
+  for (let n = 0; n < 4; n++) {
+    let did = false;
+    if (state.towers.length < want && (Math.random() < 0.65 || !state.towers.length)) {
+      const pool = AI_TYPES.filter(k => (k !== 'juice' || attackers.length >= 6) && aiCost(k) <= state.kidMoney);
+      if (pool.length) did = aiPlace(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    if (!did && state.towers.length) did = aiUpgrade(state.towers[Math.floor(Math.random() * state.towers.length)]);
+    if (!did) break;
+  }
+}
+
+function doctorPortrait(k) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 40 * DPR; c.className = 'portrait';
+  const g = c.getContext('2d');
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const prev = ctx; ctx = g;
+  const def = ENEMIES[k];
+  try {
+    drawDoctor({ key: k, def, x: 20, y: 21, r: Math.min(def.r, 13), face: -Math.PI / 2, step: 0, skin: SKIN[0], id: 1, camo: false, boss: false,
+      aura: false, hitT: 0, slowT: 0, poisonT: 0, frozenT: 0, hp: 1, maxHp: 1, noBar: true });
+  } finally { ctx = prev; }
+  return c;
+}
+
+let lastShiftInfo = '';
+function refreshShiftUI(force) {
+  $('lRound').textContent = 'Shift level'; $('lLives').textContent = 'Orchard'; $('lMoney').textContent = 'Budget $';
+  $('sRound').textContent = state.round;
+  $('sLives').textContent = Math.max(0, state.lives);
+  $('sMoney').textContent = Math.floor(state.money);
+  $('roundpick').hidden = true;
+  const left = Math.max(0, REV_SHIFT - state.revT);
+  $('sub').textContent = left > 0 ? `Code Blue · shift ends in ${fmtTime(left)}` : 'Shift over: last doctors on the way!';
+  const bs = $('btnStart');
+  bs.disabled = true;
+  bs.textContent = `Lane ${state.lane + 1} [L]`;
+  $('btnSpeed').textContent = `${state.speed}x`;
+  $('btnPause').textContent = state.paused ? '>' : 'II';
+  for (const b of shopEl.children) {
+    const k = b.dataset.type, locked = !revUnlocked(k);
+    b.disabled = locked || state.money < REV_COST[k] || left <= 0;
+    b.classList.toggle('locked', locked);
+    const pr = b.querySelector('.price'), txt = locked ? `Lv ${ENEMIES[k].intro}` : `$${REV_COST[k]}`;
+    if (pr.textContent !== txt) pr.textContent = txt;
+  }
+  const key = [state.towers.length, Math.floor(state.kidMoney / 50), state.towers.reduce((n, t) => n + t.paths[0] + t.paths[1] + t.paths[2], 0)].join('|');
+  if (key !== lastShiftInfo || force) {
+    lastShiftInfo = key;
+    lastInfoKey = '';
+    const tiers = state.towers.reduce((n, t) => n + t.paths[0] + t.paths[1] + t.paths[2], 0);
+    $('info').innerHTML = `<h3>You are the Hospital</h3>
+      <p>Send doctors with the buttons below (1-9, 0, Q-T). They leave from the glowing hospital. Click another hospital or press L to switch lanes.</p>
+      <p>Your budget grows every second, and every life you take pays $${REV_LEAK_PAY}. Tougher doctors unlock as the shift level rises.</p>
+      <p>Take all ${REV_LIVES} lives before the shift ends to win.</p>
+      <p>The kids have <b>${state.towers.length}</b> defender${state.towers.length === 1 ? '' : 's'} out with <b>${tiers}</b> upgrades, and about <b>$${Math.floor(state.kidMoney / 50) * 50}</b> saved up.</p>`;
+  }
+}
 
 // ======================= INPUT =======================
 function canvasPos(ev) {
@@ -2642,6 +3077,11 @@ canvas.addEventListener('pointerdown', ev => {
   if (!state || state.menu || state.over || ev.button === 2) return;
   const p = canvasPos(ev);
   mouse.x = p.x; mouse.y = p.y; mouse.in = true;
+  if (state.reverse) {
+    const i = CUR.buildings.findIndex(b => inBuilding([b], p.x, p.y, 16));
+    if (i >= 0) { state.lane = i; refreshUI(true); }
+    return;
+  }
   if (state.placing) {
     const t = placeTower(state.placing, p.x, p.y);
     if (t) {
@@ -2665,6 +3105,12 @@ window.addEventListener('keydown', ev => {
   if (k === 'f') { cycleSpeed(); return; }
   if (k === 's' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); manualSave(); return; }
   if (state.menu || state.over) return;
+  if (state.reverse) {
+    if (k === 'm') openGameMenu();
+    else if (k === 'l') { state.lane = (state.lane + 1) % CUR.buildings.length; refreshUI(true); }
+    else if (REV_KEYS.includes(k)) sendDoctor(REV_DOCS[REV_KEYS.indexOf(k)]);
+    return;
+  }
   const pi = PATH_KEYS.indexOf(k);
   if (pi >= 0 && state.selected) { if (state.selected.t7) buyBoost(state.selected, pi); else upgradeTower(state.selected, pi); return; }
   if (k === 's' && state.selected) { sellTower(state.selected); return; }
