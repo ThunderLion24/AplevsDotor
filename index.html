@@ -217,6 +217,10 @@
   .diffs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 6px; }
   @media (max-width: 560px) { .diffs { grid-template-columns: repeat(2, 1fr); } }
   .diffs button { min-width: 0; padding: 10px; border-top: 4px solid var(--lvl, #6b4a33); border-radius: 10px; }
+  .diffs.modes { grid-template-columns: repeat(2, 1fr); margin-top: 4px; }
+  .diffs button.sel { outline: 3px solid var(--gold); background: #66462f; }
+  .diffs button[data-boss] { --lvl: #c0392b; }
+  .diffs button[data-boss=""] { --lvl: #6ab04c; }
   .card .bigbtn.secret { margin-top: 8px; background: linear-gradient(180deg, #b03a3a, #7a1f1f); border-color: #e05a4a; }
   .card .bigbtn.secret:hover { background: linear-gradient(180deg, #c84a4a, #8e2b2b); }
   #shop .shopbtn.locked .portrait { filter: grayscale(1) brightness(.6); }
@@ -494,9 +498,30 @@ const FOES = {
                desc: 'FINAL BOSS. Calls in Big Kids as it marches. If it reaches the hospital, it\'s over.' },
 };
 for (const k in FOES) ENEMIES[k] = { ...FOES[k], foe: true };
+// Boss Mode: one boss is picked for the game and comes back at every boss round, a level higher each time.
+// It can't be shoved, the rounds keep coming while it's alive, and it gets a health bar across the top.
+const BOSS_FIRST = 40, BOSS_EVERY = 20, BOSS_LAST = 120;   // rounds 40, 60, 80, 100, 120 (then every 20 in Freeplay)
+const MODE_BOSSES = {
+  b_dean:     { name: 'The Dean',          hp: 16000, speed: 24, armor: 9,  reward: 1200, r: 25, coat: '#2c3e50', scrub: '#f6c343',
+                desc: 'Rings in a whole class of new doctors every few seconds. Higher levels bring bigger, tougher classes.' },
+  b_cutter:   { name: 'Chief of Surgery',  hp: 14000, speed: 30, armor: 12, reward: 1200, r: 24, coat: '#00b894', scrub: '#006266',
+                desc: 'Heavily armored. Sprints forward every few seconds. From level 3 it also calls in Surgeons.' },
+  b_matron:   { name: 'Head Matron',       hp: 15000, speed: 24, armor: 8,  reward: 1200, r: 25, coat: '#fd79a8', scrub: '#e84393',
+                desc: 'Patches herself up and heals every doctor nearby. From level 2 she brings Nurses along.' },
+  b_sandman:  { name: 'The Sandman',       hp: 15000, speed: 25, armor: 9,  reward: 1200, r: 24, coat: '#6c5ce7', scrub: '#a29bfe',
+                desc: 'Darts several kids at once and puts them to sleep. More kids, and longer naps, every level.' },
+  b_trauma:   { name: 'Trauma Chief',      hp: 18000, speed: 22, armor: 10, reward: 1200, r: 26, coat: '#d35400', scrub: '#2c3e50',
+                desc: 'Speeds up every doctor around it and calls in Paramedics. At half health it sounds a Code Trauma for backup.' },
+};
+for (const k in MODE_BOSSES) ENEMIES[k] = { ...MODE_BOSSES[k], intro: BOSS_FIRST, leak: 99999, bossOnly: true, modeBoss: true, noLegend: true };
+const BOSS_KEYS = Object.keys(MODE_BOSSES);
+const isBossRound = r => r >= BOSS_FIRST && (r - BOSS_FIRST) % BOSS_EVERY === 0;
+const bossLevel = r => Math.floor((r - BOSS_FIRST) / BOSS_EVERY) + 1;
+const modeBossesAlive = () => state ? state.enemies.filter(e => e.alive && e.def.modeBoss) : [];
+const bossInQueue = () => !!(state && state.queue.some(q => ENEMIES[q.key].modeBoss));
 const FOE_REGULARS = ['k_kid', 'k_speedy', 'k_basket', 'k_bouncy', 'k_juice', 'k_big', 'k_hider', 'k_skater'];
 const DEFEND_WIN = 50;
-const winRound = () => (state && state.defend ? DEFEND_WIN : WIN_ROUND);
+const winRound = () => (state && state.defend ? DEFEND_WIN : state && state.bossKey ? BOSS_LAST : WIN_ROUND);
 // Does this attacker belong to the mode being played?
 const inMode = e => !!e.foe === !!(state && state.defend);
 const REGULARS = ['student', 'intern', 'junior', 'senior', 'chief', 'nurse', 'physician', 'warmedic', 'paramedic', 'anesth', 'surgeon', 'radiologist', 'neuro'];
@@ -516,6 +541,11 @@ function bossesFor(r) {
     return b;
   }
   if (r === 20) b.push('chief');
+  // Boss Mode: the chosen boss replaces the usual bosses on its rounds
+  if (state && state.bossKey) {
+    if (isBossRound(r)) b.push(state.bossKey);
+    return b;
+  }
   if (r === 100 || (r > 100 && r % 50 === 0)) { b.push('hospital'); return b; }
   if (r >= 40 && r % 10 === 0) b.push('head');
   if (r >= 50 && r % 10 === 0) b.push('director');
@@ -693,11 +723,15 @@ let state = null;
 let menuFromGame = false; // menu opened mid-game: offer "Back to game" instead of "Continue"
 let menuMap = 'classic';
 try { const m = localStorage.getItem('appleAttackMap'); if (m && MAPS.some(x => x.id === m)) menuMap = m; } catch (e) { /* storage unavailable */ }
+// '' = classic game, 'random' or a MODE_BOSSES key = Boss Mode
+let menuBoss = '';
+try { const b = localStorage.getItem('appleAttackBoss'); if (b === 'random' || MODE_BOSSES[b]) menuBoss = b; } catch (e) { /* storage unavailable */ }
 let nextId = 1;
 let mouse = { x: -100, y: -100, in: false };
 
-function newGame(diffKey, mapId = menuMap) {
+function newGame(diffKey, mapId = menuMap, bossPick = '') {
   const d = DIFFS[diffKey];
+  const bossKey = bossPick === 'random' ? BOSS_KEYS[Math.floor(Math.random() * BOSS_KEYS.length)] : (MODE_BOSSES[bossPick] ? bossPick : null);
   applySkin(false);
   CUR = mapData(mapId);
   const bg = bgCanvas.getContext('2d');
@@ -708,7 +742,7 @@ function newGame(diffKey, mapId = menuMap) {
     towers: [], enemies: [], projs: [], parts: [], texts: [], queue: [], pending: [], traps: [], bees: [], shake: 0,
     spawnT: 0, inWave: false, speed: 1, auto: $('chkAuto').checked, autoT: 0,
     selected: null, placing: null, over: false, won: false, paused: false, menu: false,
-    seen: new Set(), reverse: false, defend: false, shaken: null,
+    seen: new Set(), reverse: false, defend: false, shaken: null, bossKey,
   };
   buildShop();
   refreshLegend();
@@ -771,7 +805,7 @@ function announceRound(r) {
   const lines = [];
   for (const k in ENEMIES) {
     const e = ENEMIES[k];
-    if (e.intro === r && inMode(e) && k !== 'chief' && k !== 'hospital' && k !== 'k_principal') lines.push(`<div class="new">NEW: ${e.name}${e.bossOnly ? ' (BOSS)' : ''}</div>`);
+    if (e.intro === r && inMode(e) && !e.modeBoss && !(state.bossKey && (k === 'head' || k === 'director')) && k !== 'chief' && k !== 'hospital' && k !== 'k_principal') lines.push(`<div class="new">NEW: ${e.name}${e.bossOnly ? ' (BOSS)' : ''}</div>`);
   }
   if (state.defend) {
     if (r === 20) lines.push(`<div class="new">BOSS: a really Big Kid!</div>`);
@@ -780,7 +814,13 @@ function announceRound(r) {
   }
   else {
   if (r === 20) lines.push(`<div class="new">BOSS: Chief Resident!</div>`);
-  if (r === 100) lines.push(`<div class="new">FINAL BOSS: the Hospital itself is coming!</div>`);
+  if (r === 100 && !state.bossKey) lines.push(`<div class="new">FINAL BOSS: the Hospital itself is coming!</div>`);
+  if (state.bossKey && isBossRound(r)) {
+    const lv = bossLevel(r);
+    lines.push(`<div class="new">BOSS: ${ENEMIES[state.bossKey].name} &middot; Level ${lv}${lv === 1 ? '' : ' (stronger than ever!)'}</div>`);
+    if (r === BOSS_FIRST) lines.push(`<div>It can't be shoved, and the rounds keep coming until it's down.</div>`);
+    if (r === BOSS_LAST) lines.push(`<div>Final showdown: beat this round and every boss to win!</div>`);
+  }
   }
   if (!state.defend && r === 35) lines.push(`<div>War Medics are camouflaged: give kids Camo Goggles to see them!</div>`);
   if (!state.defend && r === 30) lines.push(`<div class="new">Chief Residents now attack as regular doctors!</div>`);
@@ -790,7 +830,7 @@ function announceRound(r) {
   if (r > DOUBLING_ROUND) lines.push(`<div>Doctor toughness: x${fmtMult(freeplayMult(r))}</div>`);
   if (r === FIB_SPEED_ROUND + 1) lines.push(`<div class="new">Doctors now speed up every round, following the Fibonacci sequence!</div>`);
   if (r > FIB_SPEED_ROUND) lines.push(`<div>Doctor speed: +${fmtMult(fib(Math.min(r - FIB_SPEED_ROUND, 1400)))}%</div>`);
-  const bosses = bossesFor(r).filter(k => !(k === 'chief' && r === 20) && !(k === 'k_big' && r === 20) && ENEMIES[k].intro !== r);
+  const bosses = bossesFor(r).filter(k => !(k === 'chief' && r === 20) && !(k === 'k_big' && r === 20) && ENEMIES[k].intro !== r && !ENEMIES[k].modeBoss);
   for (const k of bosses) lines.push(`<div>Boss incoming: ${ENEMIES[k].name}</div>`);
   showBanner(`<div class="big">Round ${r}</div>${lines.join('')}`, lines.length ? 3.5 : 1.6);
 }
@@ -823,13 +863,19 @@ function endWave() {
   saveBest(state.round);
   const from = state.defend ? 'billing' : 'orchards';
   showBanner(`<div class="big">Round ${state.round} cleared!</div><div>+$${bonus} bonus${income ? ` &middot; +$${income} from ${from}` : ''}${healed ? ` &middot; +${healed} ${healed === 1 ? 'life' : 'lives'}` : ''}</div>`, 2.2);
-  if (state.round >= winRound() && !state.won) {
-    state.won = true;
-    showOverlay('win');
-  }
+  checkWin();
   saveGame();
   if (state.auto) state.autoT = 1.5;
+  // Boss Mode: while the boss is still up, the next round starts on its own
+  else if (modeBossesAlive().length) state.autoT = 3;
   refreshUI(true);
+}
+function checkWin() {
+  if (state.won || state.over || state.inWave || state.round < winRound()) return;
+  // Boss Mode is only won once every boss is down
+  if (state.bossKey && (modeBossesAlive().length || bossInQueue())) return;
+  state.won = true;
+  showOverlay('win');
 }
 
 // ======================= ENTITIES =======================
@@ -840,11 +886,14 @@ function spawnEnemy(key, boss, d0 = 0, summoned = false, route = null) {
   const isBoss = boss || !!def.bossOnly;
   let hp = def.hp * m, r = def.r, reward = def.reward, leak = def.leak, armor = def.armor + Math.floor(state.round / 25);
   if (boss && !def.bossOnly) { hp *= 5; r *= 1.45; reward *= 8; leak *= 4; armor += 2; }
+  // Boss Mode boss: tougher, bigger and richer every level
+  const level = def.modeBoss ? Math.max(1, bossLevel(state.round)) : 0;
+  if (level) { hp *= 1 + 0.6 * (level - 1); armor += 2 * (level - 1); r += 2 * (level - 1); reward *= level; }
   if (summoned) reward = reward / 2;
   reward = Math.max(1, Math.round(reward * (1 + state.round * 0.01) * state.diff.reward));
   const p = posAt(CUR.routes[route], d0);
   const e = {
-    id: nextId++, key, def, boss: isBoss, route, spdMult: speedMult(state.round), hp, maxHp: hp, d: d0, r, reward, leak, armor,
+    id: nextId++, key, def, boss: isBoss, level, route, spdMult: speedMult(state.round) * (level ? 1 + 0.06 * (level - 1) : 1), hp, maxHp: hp, d: d0, r, reward, leak, armor,
     slowT: 0, slowF: 1, abilT: 2 + Math.random() * 2, face: 0, x: p.x, y: p.y, alive: true,
     hitT: 0, aura: false, camo: !!def.camo, poisonT: 0, poisonDps: 0, poisonSrc: null, knockT: 0, frozenT: 0, freezeImm: 0, skin: SKIN[Math.floor(Math.random() * SKIN.length)], step: Math.random() * 6,
   };
@@ -1061,9 +1110,10 @@ function makeTower(type, x, y) {
 // "ready to start round N+1". Anything bought during a round gets saved once that round ends.
 const SAVE_KEY = 'appleAttackSave', SAVE_VERSION = 1;
 function saveGame() {
-  if (!state || state.over || state.inWave || state.reverse || state.defend) return false;
+  // a Boss Mode boss (or its minions) still on the field can't be saved, so wait for a clear field
+  if (!state || state.over || state.inWave || state.reverse || state.defend || state.enemies.length) return false;
   const data = {
-    v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId,
+    v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId, bossKey: state.bossKey || undefined,
     round: state.round, lives: state.lives, money: state.money, rr: state.rr, won: state.won, speed: state.speed,
     seen: [...state.seen],
     towers: state.towers.map(t => ({ type: t.type, x: t.x, y: t.y, paths: t.paths, mode: t.mode, camo: t.camo, spent: t.spent, kills: t.kills, dealt: Math.round(t.dealt || 0), t6: t.t6 || undefined, t7: t.t7 || undefined })),
@@ -1083,7 +1133,7 @@ function loadSave() {
 }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ } }
 function restoreGame(d) {
-  newGame(d.diffKey, d.mapId);
+  newGame(d.diffKey, d.mapId, MODE_BOSSES[d.bossKey] ? d.bossKey : '');
   const num = (v, dflt) => (Number.isFinite(v) ? v : dflt);
   state.round = Math.max(0, num(d.round, 0) | 0);
   state.lives = num(d.lives, state.lives);
@@ -1143,11 +1193,12 @@ function manualSave() {
     showBanner('<div class="big">Round in progress</div><div>The game saves itself when this round ends.</div>', 2);
     return;
   }
+  if (state.enemies.length) { showBanner('<div class="big">The boss is still out there</div><div>The game saves once the field is clear.</div>', 2); return; }
   showBanner(saveGame() ? '<div class="big">Game saved</div>' : '<div class="big">Could not save</div><div>Your browser is blocking storage.</div>', 1.6);
 }
 const describeSave = d => {
   const map = MAPS.find(m => m.id === d.mapId);
-  return `${map.name} &middot; ${DIFFS[d.diffKey].name} &middot; ${d.round ? `round ${d.round} done` : 'not started'} &middot; ${d.towers.length} kid${d.towers.length === 1 ? '' : 's'}`;
+  return `${map.name} &middot; ${DIFFS[d.diffKey].name}${MODE_BOSSES[d.bossKey] ? ` &middot; Boss Mode (${MODE_BOSSES[d.bossKey].name})` : ''} &middot; ${d.round ? `round ${d.round} done` : 'not started'} &middot; ${d.towers.length} kid${d.towers.length === 1 ? '' : 's'}`;
 };
 
 function upgradeTower(t, i) {
@@ -1323,7 +1374,7 @@ function ringBell(t, st) {
   t.cd = st.rate; t.throwT = 0.3;
   for (const e of hits) {
     damage(e, st.dmg, false, t);
-    if (!e.alive || e.knockT > 0 || e.key === 'hospital' || e.def.lead) continue;
+    if (!e.alive || e.knockT > 0 || e.key === 'hospital' || e.def.lead || e.def.modeBoss) continue;
     e.d = Math.max(0, e.d - st.knock * (e.boss ? BOSS_KNOCK : 1));
     e.knockT = KNOCK_IMMUNE;
     const p = posAt(CUR.routes[e.route], e.d);
@@ -1411,15 +1462,15 @@ function applyJuice() {
 
 // Anesthesiologist: darts the nearest attacking kid and puts it to sleep.
 const SLEEP_RANGE = 130, SLEEP_TIME = 2;
-function dartKid(e) {
-  let best = null, bd = SLEEP_RANGE;
+function dartKid(e, range = SLEEP_RANGE, time = SLEEP_TIME) {
+  let best = null, bd = range;
   for (const t of state.towers) {
     if (isSupport(TOWERS[t.type]) || t.sleepT > 0) continue;
     const d = Math.hypot(t.x - e.x, t.y - e.y);
     if (d < bd) { bd = d; best = t; }
   }
   if (!best) return false;
-  best.sleepT = SLEEP_TIME;
+  best.sleepT = time;
   best.beamT = 0; best.beamTarget = null;
   state.parts.push({ x: e.x, y: e.y, x2: best.x, y2: best.y, vx: 0, vy: 0, life: 0.2, max: 0.2, color: 'tracer', size: 1.5 });
   addText(best.x, best.y - 24, 'Zzz', '#a29bfe', 1);
@@ -1503,7 +1554,7 @@ function damage(e, dmg, pierce, tower, dot = false) {
     stars(e.x, e.y, e.boss ? 18 : 5, e.boss ? 170 : 90);
     state.parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0.3, max: 0.3, color: 'poof', size: e.r * (e.boss ? 3 : 2) });
     if (e.boss) state.shake = Math.max(state.shake, e.key === 'hospital' ? 18 : 10);
-    if (e.boss) showBanner(`<div class="big">${e.def.name} defeated!</div><div>+$${e.reward}</div>`, 2);
+    if (e.boss) showBanner(`<div class="big">${e.def.name}${e.level ? ` (Level ${e.level})` : ''} defeated!</div><div>+$${e.reward}</div>`, 2);
   }
 }
 
@@ -1543,10 +1594,13 @@ function update(dt) {
         const hb = CUR.buildings[spawned.route];
         burst(hb.cx, hb.cy, '#bdc3c7', 60, 200);
         showBanner(`<div class="big">FINAL BOSS</div><div class="new">The Hospital has uprooted itself!</div>`, 3);
+      } else if (spawned.def.modeBoss) {
+        state.shake = Math.max(state.shake, 8);
+        showBanner(`<div class="big">BOSS: ${spawned.def.name}</div><div class="new">Level ${spawned.level}</div>`, 2.5);
       } else if (item.boss) showBanner(`<div class="big">BOSS: ${ENEMIES[item.key].name}</div>`, 2);
       state.spawnT += state.queue.length ? state.queue[0].delay : 0;
     }
-  } else if (state.auto && state.autoT > 0 && !state.reverse) {
+  } else if ((state.auto || modeBossesAlive().length) && state.autoT > 0 && !state.reverse) {
     state.autoT -= dt;
     if (state.autoT <= 0) startWave();
   }
@@ -1555,8 +1609,9 @@ function update(dt) {
   // director aura
   for (const e of state.enemies) e.aura = false;
   for (const dct of state.enemies) {
-    if ((dct.key !== 'director' && dct.key !== 'k_coach') || !dct.alive) continue;
-    for (const e of state.enemies) if (e !== dct && Math.hypot(e.x - dct.x, e.y - dct.y) < 110) e.aura = true;
+    if ((dct.key !== 'director' && dct.key !== 'k_coach' && dct.key !== 'b_trauma') || !dct.alive) continue;
+    const rad = auraRadius(dct);
+    for (const e of state.enemies) if (e !== dct && Math.hypot(e.x - dct.x, e.y - dct.y) < rad) e.aura = true;
   }
 
   // enemies
@@ -1630,6 +1685,8 @@ function update(dt) {
             e.abilT = 7;
           } else e.abilT = 1e9;
           break;
+        case 'b_dean': case 'b_cutter': case 'b_matron': case 'b_sandman': case 'b_trauma':
+          e.abilT = bossAbility(e); break;
         case 'hospital': {
           const pool = ['nurse', 'physician', 'surgeon', 'neuro', 'chief', 'warmedic', 'paramedic', 'anesth', 'radiologist'];
           for (let i = 0; i < 3; i++) spawnEnemy(pool[Math.floor(Math.random() * pool.length)], false, Math.max(0, e.d - 30 - i * 20), true, e.route);
@@ -1638,6 +1695,12 @@ function update(dt) {
         }
         default: e.abilT = 1e9;
       }
+    }
+    if (e.key === 'b_trauma' && !e.phase2 && e.hp < e.maxHp * 0.5) {
+      e.phase2 = true;
+      const pool = ['physician', 'surgeon', 'radiologist', 'neuro', 'paramedic'];
+      for (let i = 0; i < 2 + e.level; i++) bossMinion(pool[Math.floor(Math.random() * pool.length)], e, 30 + i * 22);
+      showBanner(`<div class="big">Code Trauma!</div><div class="new">The Trauma Chief called in ${2 + e.level} specialists!</div>`, 3);
     }
     if (e.key === 'hospital' && !e.phase2 && e.hp < e.maxHp * 0.5) {
       e.phase2 = true;
@@ -1725,7 +1788,57 @@ function update(dt) {
   state.enemies = state.enemies.filter(e => e.alive);
   if (state.selected && !state.towers.includes(state.selected)) state.selected = null;
 
-  if (state.inWave && !state.queue.length && !state.enemies.length && !state.pending.length) endWave();
+  // Boss Mode: the boss and the doctors it calls in don't hold up the round
+  if (state.inWave && !state.queue.length && !state.pending.length && !state.enemies.some(e => !e.def.modeBoss && !e.minion)) endWave();
+  else if (!state.inWave && state.bossKey && !state.won) checkWin();
+}
+
+// ---- Boss Mode abilities. Each one grows with the boss's level. Returns the cooldown. ----
+const auraRadius = e => e.key === 'b_trauma' ? 120 + 20 * e.level : 110;
+function bossMinion(key, e, back) {
+  const m = spawnEnemy(key, false, Math.max(0, e.d - back), true, e.route);
+  m.minion = true;
+  return m;
+}
+function bossAbility(e) {
+  const lv = e.level, cd = f => f * Math.max(0.55, 1 - 0.1 * (lv - 1));
+  switch (e.key) {
+    case 'b_dean': {
+      // a bigger, older class every level
+      const pool = ['student', 'intern', 'junior', 'senior', 'physician', 'surgeon'].slice(Math.min(lv - 1, 3), lv + 2);
+      for (let i = 0; i < lv + 2; i++) bossMinion(pool[Math.floor(Math.random() * pool.length)], e, 18 + i * 16);
+      addText(e.x, e.y - e.r - 10, 'Class is in session!', '#f6c343', 1);
+      return cd(6);
+    }
+    case 'b_cutter':
+      e.dashT = 0.8 + 0.15 * lv;
+      if (lv >= 3) for (let i = 0; i < lv - 2; i++) bossMinion('surgeon', e, 20 + i * 18);
+      addText(e.x, e.y - e.r - 10, 'Scalpel!', '#55efc4', 0.8);
+      return cd(5);
+    case 'b_matron': {
+      e.hp = Math.min(e.maxHp, e.hp + e.maxHp * (0.02 + 0.01 * lv));
+      for (const o of state.enemies) {
+        if (o.alive && o !== e && o.hp < o.maxHp && Math.hypot(o.x - e.x, o.y - e.y) < 110 + 10 * lv) {
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.1); burst(o.x, o.y, '#55efc4', 4, 40);
+        }
+      }
+      for (let i = 0; i < lv - 1; i++) bossMinion('nurse', e, 18 + i * 18);
+      burst(e.x, e.y, '#55efc4', 14, 80);
+      addText(e.x, e.y - e.r - 10, 'Bedside manner!', '#55efc4', 1);
+      return cd(5);
+    }
+    case 'b_sandman': {
+      let n = 0;
+      for (let i = 0; i < lv + 1; i++) if (dartKid(e, 160 + 15 * lv, 2 + 0.3 * lv)) n++;
+      if (n) addText(e.x, e.y - e.r - 10, 'Nap time!', '#a29bfe', 1);
+      return n ? cd(6) : 0.5;
+    }
+    case 'b_trauma':
+      for (let i = 0; i < lv; i++) bossMinion('paramedic', e, 18 + i * 18);
+      addText(e.x, e.y - e.r - 10, 'Incoming!', '#e67e22', 0.9);
+      return cd(7);
+  }
+  return 1e9;
 }
 
 function impact(p) {
@@ -1769,7 +1882,7 @@ function saveBest(r) {
   if (state.diff.sandbox || state.reverse || state.defend) return;
   try {
     const b = getBest();
-    const k = `${state.mapId}:${state.diffKey}`;
+    const k = `${state.mapId}:${state.diffKey}${state.bossKey ? ':boss' : ''}`;
     if (!b[k] || r > b[k]) { b[k] = r; localStorage.setItem('appleAttackBest', JSON.stringify(b)); }
   } catch (e) { /* storage unavailable */ }
 }
@@ -2693,9 +2806,15 @@ function drawDoctor(e) {
     ctx.strokeStyle = 'rgba(255,118,117,0.6)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, 0, r + 3, 0, Math.PI * 2); ctx.stroke();
   }
-  if (e.key === 'director' || e.key === 'k_coach') {
+  if (e.key === 'director' || e.key === 'k_coach' || e.key === 'b_trauma') {
     ctx.fillStyle = 'rgba(255,118,117,0.08)';
-    ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, auraRadius(e), 0, Math.PI * 2); ctx.fill();
+  }
+  if (def.modeBoss) {
+    // a second, red ring that pulses: can't be shoved
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+    ctx.strokeStyle = `rgba(231,76,60,${0.35 + 0.4 * pulse})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, r + 11, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.rotate(e.face);
   if (def.foe) drawFoeBody(e);
@@ -2785,6 +2904,7 @@ function drawDoctor(e) {
     ctx.fillStyle = hairCol;
     ctx.beginPath(); ctx.arc(r * 0.05, 0, r * 0.5, Math.PI * 0.6, Math.PI * 1.4); ctx.closePath(); ctx.fill();
   }
+  if (def.modeBoss) drawBossGear(e);
   }
   if (e.hitT > 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -2810,6 +2930,16 @@ function drawDoctor(e) {
   }
   ctx.restore();
   if (e.noBar) { ctx.globalAlpha = 1; return; }
+  if (def.modeBoss) {
+    // the big health bar lives at the top of the screen; here just a level badge
+    const txt = `Lv ${e.level}`;
+    ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    const tw = ctx.measureText(txt).width + 10, by = e.y - r - 24;
+    ctx.fillStyle = '#7a1f1f'; ctx.strokeStyle = '#f6c343'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(e.x - tw / 2, by, tw, 15, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffeaa7'; ctx.fillText(txt, e.x, by + 11.5);
+    ctx.globalAlpha = 1; return;
+  }
 
   // health bar
   const bw = Math.max(22, r * 2.2), bh = e.boss ? 5 : 4, by = e.y - r - (e.boss ? 14 : 9);
@@ -2823,6 +2953,68 @@ function drawDoctor(e) {
     ctx.fillStyle = '#f6c343'; ctx.fillText(def.name, e.x, by - 4);
   }
   ctx.globalAlpha = 1;
+}
+
+// Boss Mode bosses: a hat or prop on top of the doctor body, plus gold stars for each level.
+// Drawn in the boss's rotated frame (facing +x).
+function drawBossGear(e) {
+  const r = e.r;
+  switch (e.key) {
+    case 'b_dean':
+      // mortarboard with a tassel
+      ctx.fillStyle = '#2d3436'; ctx.save(); ctx.rotate(Math.PI / 4); ctx.fillRect(-r * 0.55, -r * 0.55, r * 1.1, r * 1.1); ctx.restore();
+      ctx.strokeStyle = '#f6c343'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-r * 0.3, r * 0.75); ctx.stroke();
+      ctx.fillStyle = '#f6c343'; ctx.beginPath(); ctx.arc(-r * 0.3, r * 0.75, r * 0.1, 0, 7); ctx.fill();
+      break;
+    case 'b_cutter':
+      // giant scalpel
+      ctx.fillStyle = '#636e72'; ctx.fillRect(r * 0.4, r * 0.7, r * 0.5, r * 0.18);
+      ctx.fillStyle = '#dfe6e9'; ctx.beginPath(); ctx.moveTo(r * 0.9, r * 0.66); ctx.lineTo(r * 1.7, r * 0.79); ctx.lineTo(r * 0.9, r * 0.92); ctx.closePath(); ctx.fill();
+      break;
+    case 'b_matron':
+      // first-aid kit in hand
+      ctx.fillStyle = '#fff'; ctx.fillRect(r * 0.45, r * 0.55, r * 0.55, r * 0.45);
+      ctx.fillStyle = '#e74c3c'; ctx.fillRect(r * 0.66, r * 0.6, r * 0.13, r * 0.35); ctx.fillRect(r * 0.55, r * 0.71, r * 0.35, r * 0.13);
+      break;
+    case 'b_sandman':
+      // dart gun and a trail of z's
+      ctx.fillStyle = '#2d3436'; ctx.fillRect(r * 0.4, r * 0.7, r * 0.8, r * 0.2);
+      ctx.fillStyle = '#a29bfe'; ctx.fillRect(r * 0.5, r * 0.62, r * 0.3, r * 0.1);
+      break;
+    case 'b_trauma': {
+      // hard hat with a flashing siren
+      ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, 7); ctx.fill();
+      ctx.fillStyle = Math.sin(performance.now() / 90) > 0 ? '#ff3b30' : '#0a84ff';
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, 7); ctx.fill();
+      break;
+    }
+  }
+  // one gold star per level, behind the boss
+  ctx.fillStyle = '#f6c343';
+  for (let i = 0; i < e.level && i < 8; i++) drawStar(-r * 1.05, (i - (Math.min(e.level, 8) - 1) / 2) * r * 0.42, r * 0.17, 0);
+}
+
+// Boss Mode: a big health bar across the top of the field for each boss on the field.
+function drawBossBars() {
+  const bosses = state.enemies.filter(e => e.alive && e.def.modeBoss);
+  bosses.forEach((e, i) => {
+    const x = 120, w = W - 240, h = 14, y = 12 + i * 34;
+    const f = Math.max(0, e.hp / e.maxHp);
+    ctx.fillStyle = 'rgba(20,12,6,0.85)'; ctx.strokeStyle = '#f6c343'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(x - 4, y - 2, w + 8, h + 20, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3d2a1c'; ctx.fillRect(x, y + 14, w, h - 4);
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, '#c0392b'); g.addColorStop(1, f > 0.5 ? '#e74c3c' : f > 0.25 ? '#e67e22' : '#ff3b30');
+    ctx.fillStyle = g; ctx.fillRect(x, y + 14, w * f, h - 4);
+    ctx.font = 'bold 12px sans-serif'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left'; ctx.fillStyle = '#ffeaa7'; ctx.fillText(`${e.def.name.toUpperCase()}  ·  LEVEL ${e.level}`, x + 2, y + 6);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#c9b391';
+    ctx.fillText(`${fmtMult(Math.ceil(Math.max(0, e.hp)))} / ${fmtMult(Math.ceil(e.maxHp))}`, x + w - 2, y + 6);
+    ctx.textBaseline = 'alphabetic';
+  });
+  // keep round banners from covering the bars
+  const top = bosses.length ? `${14 + bosses.length * 34}px` : '';
+  if (banner.style.top !== top) banner.style.top = top;
 }
 
 const TRAIL_RGB = { kid: '231,76,60', twins: '139,195,74', caramel: '185,119,14', rotten: '125,107,58', bouncer: '255,159,67', juggler: '246,195,67' };
@@ -3066,6 +3258,7 @@ function render() {
   }
   ctx.globalAlpha = 1;
   ctx.restore(); // end of screen shake
+  drawBossBars();
 
   // placement ghost
   if (state.placing && mouse.in) {
@@ -3154,7 +3347,7 @@ function refreshUI(force) {
   const left = state.queue.length + state.enemies.length;
   const foes = state.defend ? 'Kids' : 'Doctors', mine = state.defend ? 'doctors' : 'kids';
   $('legendtitle').textContent = `${foes} spotted`;
-  $('sub').textContent = state.inWave ? `${foes} remaining: ${left}` : (state.round === 0 ? (state.defend ? 'Hospital Defense · keep the kids out!' : `${CUR.map.name} (${CUR.map.level}) · ${state.diff.name}`) : (state.auto && state.autoT > 0 ? 'Next round starting...' : `Place ${mine}, then start the next round.`));
+  $('sub').textContent = state.inWave ? `${foes} remaining: ${left}` : (state.round === 0 ? (state.defend ? 'Hospital Defense · keep the kids out!' : `${CUR.map.name} (${CUR.map.level}) · ${state.diff.name}${state.bossKey ? ' · Boss Mode' : ''}`) : ((state.auto || modeBossesAlive().length) && state.autoT > 0 ? (state.auto ? 'Next round starting...' : 'The boss is still up: next round starting...') : `Place ${mine}, then start the next round.`));
   if (state.round >= winRound()) $('sub').textContent = `Freeplay${state.round + (state.inWave ? 0 : 1) > DOUBLING_ROUND ? ` (doctors x${fmtMult(freeplayMult(state.round + (state.inWave ? 0 : 1)))})` : ''} · ` + $('sub').textContent;
   const bs = $('btnStart');
   bs.disabled = state.inWave || state.over || state.menu;
@@ -3297,7 +3490,7 @@ function refreshLegend() {
     const e = ENEMIES[k];
     return `<div class="lg" title="${e.desc}"><span class="dot" style="background:${e.coat};border-color:${e.scrub}"></span>${e.name}<small>R${e.intro}${e.bossOnly ? ' boss' : ''}</small></div>`;
   }).join('');
-  const upcoming = Object.keys(ENEMIES).filter(k => !state.seen.has(k) && inMode(ENEMIES[k]) && !ENEMIES[k].noLegend).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro)[0];
+  const upcoming = Object.keys(ENEMIES).filter(k => !state.seen.has(k) && inMode(ENEMIES[k]) && !ENEMIES[k].noLegend && !(state.bossKey && ['head', 'director', 'hospital'].includes(k))).sort((a, b) => ENEMIES[a].intro - ENEMIES[b].intro)[0];
   if (upcoming && !state.reverse) html += `<div class="next">Next arrival: ${ENEMIES[upcoming].name} (round ${ENEMIES[upcoming].intro})</div>`;
   if (!keys.length && !upcoming) html = '';
   el.innerHTML = html;
@@ -3313,8 +3506,13 @@ function showOverlay(kind) {
         <span class="mname">${m.name}</span>
         <span class="mlevel" style="background:${LEVEL_COLORS[m.level]}">${m.level} &middot; ${m.paths.length} path${m.paths.length > 1 ? 's' : ''}</span>
       </button>`).join('');
+    const modeBtns = `<button data-boss="" class="${menuBoss ? '' : 'sel'}"><b>Classic</b><span>New doctors and bosses as you go. The Hospital attacks at round ${WIN_ROUND}.</span></button>
+      <button data-boss="${menuBoss || 'random'}" class="${menuBoss ? 'sel' : ''}"><b>Boss Mode</b><span>One boss returns at rounds ${BOSS_FIRST}, ${BOSS_FIRST + BOSS_EVERY}, ${BOSS_FIRST + 2 * BOSS_EVERY}, ${BOSS_FIRST + 3 * BOSS_EVERY} and ${BOSS_LAST}, a level stronger every time. It can't be shoved and the rounds don't wait for it.</span></button>`;
+    const bossBtns = !menuBoss ? '' : `<h3 class="mh">Pick your boss</h3><div class="diffs">
+      <button data-boss="random" class="${menuBoss === 'random' ? 'sel' : ''}"><b>Random</b><span>A surprise. You find out at round ${BOSS_FIRST}.</span></button>
+      ${BOSS_KEYS.map(k => `<button data-boss="${k}" class="${menuBoss === k ? 'sel' : ''}"><b>${MODE_BOSSES[k].name}</b><span>${MODE_BOSSES[k].desc}</span></button>`).join('')}</div>`;
     const diffBtns = Object.entries(DIFFS).map(([k, d]) => {
-      const b = best[`${sel.id}:${k}`];
+      const b = best[`${sel.id}:${k}${menuBoss ? ':boss' : ''}`];
       return `<button data-diff="${k}"><b>${d.name}</b><span>${d.desc}<br>${fmtCount(d.lives)} ${d.lives === 1 ? 'life' : 'lives'}${d.lifeCap ? ' max' : ''} &middot; $${fmtCount(d.money)}${d.sandbox ? ' &middot; any round' : ''}${d.costMult ? ` &middot; ${d.costMult}x prices` : ''}${b ? `<br>Best: round ${b}` : ''}</span></button>`;
     }).join('');
     const save = loadSave();
@@ -3332,7 +3530,10 @@ function showOverlay(kind) {
       <h3 class="mh">${resume ? 'Or start a new game: ' : ''}1. Pick a map</h3>
       <div class="maps">${mapBtns}</div>
       <p class="mdesc"><b>${sel.name}:</b> ${sel.desc}</p>
-      <h3 class="mh">2. Pick a difficulty to start</h3>
+      <h3 class="mh">2. Pick a mode</h3>
+      <div class="diffs modes">${modeBtns}</div>
+      ${bossBtns}
+      <h3 class="mh">3. Pick a difficulty to start</h3>
       <div class="diffs">${diffBtns}</div>
       ${secretUnlocked() ? '<button class="bigbtn secret" data-act="reverse">Code Blue: play as the Hospital</button>' : ''}
       ${defendUnlocked() ? '<button class="bigbtn secret" data-act="defend">Hospital Defense: keep the kids out</button>' : ''}
@@ -3356,8 +3557,13 @@ function showOverlay(kind) {
       <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   } else if (kind === 'over') {
     html = `<div class="card"><h2>The doctors got in!</h2>
-      <p>They reached the orchard on round <b>${state.round}</b> (${CUR.map.name}, ${state.diff.name}).<br>Best here: round ${Math.max(best[`${state.mapId}:${state.diffKey}`] || 0, state.round - 1)}.</p>
+      <p>They reached the orchard on round <b>${state.round}</b> (${CUR.map.name}, ${state.diff.name}).<br>Best here: round ${Math.max(best[`${state.mapId}:${state.diffKey}${state.bossKey ? ':boss' : ''}`] || 0, state.round - 1)}.</p>
       <button class="bigbtn" data-act="retry">Try again</button><button class="bigbtn" data-act="menu">Change map / difficulty</button></div>`;
+  } else if (kind === 'win' && state.bossKey) {
+    html = `<div class="card"><h2>Boss beaten!</h2>
+      <p>You took down ${ENEMIES[state.bossKey].name} at every level and held the orchard through round ${BOSS_LAST} on ${state.diff.name}.</p>
+      <p>In Freeplay it keeps coming back every ${BOSS_EVERY} rounds, one level stronger. How far can you get?</p>
+      <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   } else if (kind === 'win') {
     html = `<div class="card"><h2>Orchard saved!</h2>
       <p>You knocked down the Hospital itself and held off every doctor through round ${WIN_ROUND} on ${state.diff.name}.</p>
@@ -3394,6 +3600,13 @@ overlay.addEventListener('click', ev => {
     try { localStorage.setItem('appleAttackMap', menuMap); } catch (e) { /* storage unavailable */ }
     showOverlay('menu');
   }
+  else if (b.dataset.boss !== undefined) {
+    menuBoss = b.dataset.boss;
+    try { localStorage.setItem('appleAttackBoss', menuBoss); } catch (e) { /* storage unavailable */ }
+    const top = overlay.querySelector('.card').scrollTop;
+    showOverlay('menu');
+    overlay.querySelector('.card').scrollTop = top;
+  }
   else if (b.dataset.act === 'load') {
     const d = loadSave();
     if (d) { restoreGame(d); hideOverlay(); showBanner(`<div class="big">Welcome back!</div><div>Round ${state.round + 1} is ready when you are.</div>`, 2.5); }
@@ -3403,10 +3616,10 @@ overlay.addEventListener('click', ev => {
   else if (b.dataset.diff) {
     const secret = bumpSecret(menuMap);
     if (secret === 'go') { startShift(true); hideOverlay(); return; }
-    newGame(b.dataset.diff, menuMap); hideOverlay();
+    newGame(b.dataset.diff, menuMap, menuBoss); hideOverlay();
     if (secret === 'hint') { showBanner('<div class="big">The hospital lights flicker...</div>', 3); refreshUI(true); return; } showBanner('<div class="big">Place some kids!</div><div>Then press Start Round (Space).</div>', 3); refreshUI(true);
   }
-  else if (b.dataset.act === 'retry') { if (state.defend) startDefend(); else newGame(state.diffKey, state.mapId); hideOverlay(); refreshUI(true); }
+  else if (b.dataset.act === 'retry') { if (state.defend) startDefend(); else newGame(state.diffKey, state.mapId, state.bossKey || ''); hideOverlay(); refreshUI(true); }
   else if (b.dataset.act === 'menu') { menuFromGame = !state.over; showOverlay('menu'); }
   else if (b.dataset.act === 'continue') { hideOverlay(); showBanner(`<div class="big">Freeplay!</div><div>Go forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty.</div>`, 3); refreshUI(true); }
 });
