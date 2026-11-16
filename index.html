@@ -246,6 +246,17 @@
   .card p.mdesc { margin: 8px 0 0; font-size: 13px; }
   @media (max-width: 560px) { .maps { grid-template-columns: repeat(2, 1fr); } }
   .card ul { text-align: left; color: var(--muted); font-size: 13px; padding-left: 18px; line-height: 1.5; }
+  .lb { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 4px; }
+  .lb th { color: var(--muted); font-weight: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; text-align: left; padding: 3px 6px; }
+  .lb td { padding: 4px 6px; text-align: left; border-top: 1px solid rgba(255,255,255,.06); }
+  .lb td.rk { color: var(--gold); font-weight: bold; width: 26px; }
+  .lb td.rd { font-weight: bold; color: var(--text); }
+  .lb td.sm { color: var(--muted); font-size: 12px; }
+  .lb tr.me td { background: rgba(246,195,67,.14); }
+  .lbempty { color: var(--muted); font-size: 13px; font-style: italic; margin: 6px 0; }
+  .lbform { margin: 12px 0 6px; padding: 12px; border: 2px solid var(--gold); border-radius: 12px; background: rgba(0,0,0,.2); }
+  .lbform input { font: inherit; font-size: 16px; color: var(--text); background: rgba(0,0,0,.3); border: 1px solid #6b4a33; border-radius: 8px; padding: 8px 10px; width: 220px; max-width: 100%; }
+  .lbform button { margin-left: 6px; }
   .card .bigbtn {
     font-family: var(--display); font-weight: 600; font-size: 19px; padding: 10px 24px; margin: 4px; color: #fff; border-radius: 10px;
     background: linear-gradient(180deg, #5bab3d, #3f7d2c); border-color: #6fc04f;
@@ -743,6 +754,7 @@ function newGame(diffKey, mapId = menuMap, bossPick = '') {
     spawnT: 0, inWave: false, speed: 1, auto: $('chkAuto').checked, autoT: 0,
     selected: null, placing: null, over: false, won: false, paused: false, menu: false,
     seen: new Set(), reverse: false, defend: false, shaken: null, bossKey,
+    lbId: null, lbPending: false, lbSkipped: false,
   };
   buildShop();
   refreshLegend();
@@ -863,7 +875,10 @@ function endWave() {
   saveBest(state.round);
   const from = state.defend ? 'billing' : 'orchards';
   showBanner(`<div class="big">Round ${state.round} cleared!</div><div>+$${bonus} bonus${income ? ` &middot; +$${income} from ${from}` : ''}${healed ? ` &middot; +${healed} ${healed === 1 ? 'life' : 'lives'}` : ''}</div>`, 2.2);
+  // Leaderboard: clearing round 120 asks for a name once per game
+  if (state.round >= LB_ROUND && lbEligible() && !state.lbId && !state.lbSkipped) state.lbPending = true;
   checkWin();
+  if (state.lbPending && !state.menu) showOverlay('name');
   saveGame();
   if (state.auto) state.autoT = 1.5;
   // Boss Mode: while the boss is still up, the next round starts on its own
@@ -1115,7 +1130,7 @@ function saveGame() {
   const data = {
     v: SAVE_VERSION, at: Date.now(), diffKey: state.diffKey, mapId: state.mapId, bossKey: state.bossKey || undefined,
     round: state.round, lives: state.lives, money: state.money, rr: state.rr, won: state.won, speed: state.speed,
-    seen: [...state.seen],
+    seen: [...state.seen], lbId: state.lbId || undefined, lbSkipped: state.lbSkipped || undefined,
     towers: state.towers.map(t => ({ type: t.type, x: t.x, y: t.y, paths: t.paths, mode: t.mode, camo: t.camo, spent: t.spent, kills: t.kills, dealt: Math.round(t.dealt || 0), t6: t.t6 || undefined, t7: t.t7 || undefined })),
     traps: state.traps.map(p => ({ x: p.x, y: p.y, dmg: p.dmg, splash: p.splash, tower: state.towers.indexOf(p.tower) })),
   };
@@ -1143,6 +1158,8 @@ function restoreGame(d) {
   state.won = !!d.won;
   state.speed = SPEEDS.includes(d.speed) ? d.speed : 1;
   state.seen = new Set((d.seen || []).filter(k => ENEMIES[k]));
+  state.lbId = typeof d.lbId === 'string' ? d.lbId : null;
+  state.lbSkipped = !!d.lbSkipped;
   for (const s of d.towers) {
     if (!TOWERS[s.type] || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
     const t = makeTower(s.type, s.x, s.y);
@@ -1878,8 +1895,61 @@ function gameOver() {
 
 // ======================= PERSISTENCE =======================
 function getBest() { try { return JSON.parse(localStorage.getItem('appleAttackBest') || '{}'); } catch (e) { return {}; } }
+// ---- Leaderboard: highest round, kept in this browser. You get on it by clearing round 120. ----
+const LB_KEY = 'appleAttackLeaderboard', LB_ROUND = 120, LB_SHOW = 10;
+const lbEligible = () => !!(state && !state.diff.sandbox && !state.reverse && !state.defend);
+const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function getLeaderboard() {
+  try {
+    const l = JSON.parse(localStorage.getItem(LB_KEY) || '[]');
+    return Array.isArray(l) ? l.filter(x => x && typeof x.name === 'string' && Number.isFinite(x.round)) : [];
+  } catch (e) { return []; }
+}
+function setLeaderboard(l) { try { localStorage.setItem(LB_KEY, JSON.stringify(l)); } catch (e) { /* storage unavailable */ } }
+function addLeaderboardEntry(name) {
+  const l = getLeaderboard();
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  l.push({ id, name, round: state.round, map: state.mapId, diff: state.diffKey, boss: state.bossKey || null, at: Date.now() });
+  setLeaderboard(l);
+  try { localStorage.setItem('appleAttackName', name); } catch (e) { /* storage unavailable */ }
+  return id;
+}
+// Keeps this game's entry up to date as Freeplay goes on.
+function updateLeaderboard(r) {
+  if (!state.lbId) return;
+  const l = getLeaderboard(), e = l.find(x => x.id === state.lbId);
+  if (e && r > e.round) { e.round = r; setLeaderboard(l); }
+}
+function leaderboardHtml(highlight) {
+  const l = getLeaderboard().sort((a, b) => b.round - a.round || a.at - b.at).slice(0, LB_SHOW);
+  if (!l.length) return `<p class="lbempty">No one yet. Clear round ${LB_ROUND} to get your name up here!</p>`;
+  const rows = l.map((e, i) => {
+    const map = MAPS.find(m => m.id === e.map), diff = DIFFS[e.diff], boss = MODE_BOSSES[e.boss];
+    return `<tr class="${e.id === highlight ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${esc(e.name)}</td><td class="rd">${e.round}</td>
+      <td class="sm">${boss ? `Boss: ${boss.name}` : 'Classic'}</td><td class="sm">${map ? map.name : '?'} &middot; ${diff ? diff.name : '?'}</td></tr>`;
+  }).join('');
+  return `<table class="lb"><tr><th>#</th><th>Name</th><th>Round</th><th>Mode</th><th>Map</th></tr>${rows}</table>`;
+}
+function nameFormHtml() {
+  let last = '';
+  try { last = localStorage.getItem('appleAttackName') || ''; } catch (e) { /* storage unavailable */ }
+  return `<div class="lbform"><p><b>You cleared round ${state.round}!</b> Enter your name for the leaderboard. It keeps counting as you play on.</p>
+    <input id="lbName" maxlength="16" placeholder="Your name" value="${esc(last)}" autocomplete="off">
+    <button class="bigbtn" data-act="lbsave">Save</button><button data-act="lbskip">Skip</button></div>`;
+}
+function saveLeaderboardName() {
+  const inp = $('lbName');
+  const name = (inp ? inp.value : '').trim().slice(0, 16);
+  if (!name) { if (inp) inp.focus(); return; }
+  state.lbId = addLeaderboardEntry(name);
+  state.lbPending = false;
+  saveGame();
+  showOverlay(overlayKind === 'name' ? 'leaderboard' : overlayKind);
+}
+
 function saveBest(r) {
   if (state.diff.sandbox || state.reverse || state.defend) return;
+  updateLeaderboard(r);
   try {
     const b = getBest();
     const k = `${state.mapId}:${state.diffKey}${state.bossKey ? ':boss' : ''}`;
@@ -3496,7 +3566,9 @@ function refreshLegend() {
   el.innerHTML = html;
 }
 
+let overlayKind = null;
 function showOverlay(kind) {
+  overlayKind = kind;
   const best = getBest();
   let html = '';
   if (kind === 'menu') {
@@ -3535,6 +3607,8 @@ function showOverlay(kind) {
       ${bossBtns}
       <h3 class="mh">3. Pick a difficulty to start</h3>
       <div class="diffs">${diffBtns}</div>
+      <h3 class="mh">Leaderboard: highest round</h3>
+      ${leaderboardHtml()}
       ${secretUnlocked() ? '<button class="bigbtn secret" data-act="reverse">Code Blue: play as the Hospital</button>' : ''}
       ${defendUnlocked() ? '<button class="bigbtn secret" data-act="defend">Hospital Defense: keep the kids out</button>' : ''}
       <ul>
@@ -3558,17 +3632,27 @@ function showOverlay(kind) {
   } else if (kind === 'over') {
     html = `<div class="card"><h2>The doctors got in!</h2>
       <p>They reached the orchard on round <b>${state.round}</b> (${CUR.map.name}, ${state.diff.name}).<br>Best here: round ${Math.max(best[`${state.mapId}:${state.diffKey}${state.bossKey ? ':boss' : ''}`] || 0, state.round - 1)}.</p>
+      ${state.lbId ? `<h3 class="mh">Leaderboard</h3>${leaderboardHtml(state.lbId)}` : ''}
       <button class="bigbtn" data-act="retry">Try again</button><button class="bigbtn" data-act="menu">Change map / difficulty</button></div>`;
   } else if (kind === 'win' && state.bossKey) {
     html = `<div class="card"><h2>Boss beaten!</h2>
       <p>You took down ${ENEMIES[state.bossKey].name} at every level and held the orchard through round ${BOSS_LAST} on ${state.diff.name}.</p>
       <p>In Freeplay it keeps coming back every ${BOSS_EVERY} rounds, one level stronger. How far can you get?</p>
+      ${state.lbPending ? nameFormHtml() : state.lbId ? leaderboardHtml(state.lbId) : ''}
       <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   } else if (kind === 'win') {
     html = `<div class="card"><h2>Orchard saved!</h2>
       <p>You knocked down the Hospital itself and held off every doctor through round ${WIN_ROUND} on ${state.diff.name}.</p>
       <p>Freeplay lets you keep going forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty. How far can you get?</p>
+      ${state.lbPending ? nameFormHtml() : state.lbId ? leaderboardHtml(state.lbId) : ''}
       <button class="bigbtn" data-act="continue">Enter Freeplay</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
+  } else if (kind === 'name') {
+    html = `<div class="card"><h2>Round ${state.round} cleared!</h2>${nameFormHtml()}</div>`;
+  } else if (kind === 'leaderboard') {
+    html = `<div class="card"><h2>You're on the board!</h2>
+      <p>Your spot updates every round you clear from here on.</p>
+      ${leaderboardHtml(state.lbId)}
+      <button class="bigbtn" data-act="resume">Keep playing</button></div>`;
   }
   else if (kind === 'shiftwin' || kind === 'shiftlose') {
     const time = fmtTime(Math.min(state.revT, REV_SHIFT));
@@ -3581,6 +3665,8 @@ function showOverlay(kind) {
         <button class="bigbtn" data-act="reverse">Try another shift</button><button class="bigbtn" data-act="menu">Main menu</button></div>`;
   }
   overlay.innerHTML = html;
+  const nameInput = overlay.querySelector('#lbName');
+  if (nameInput) setTimeout(() => { nameInput.focus(); nameInput.select(); }, 0);
   for (const c of overlay.querySelectorAll('canvas[data-thumb]')) c.getContext('2d').drawImage(mapThumb(c.dataset.thumb), 0, 0, c.width, c.height);
   overlay.classList.remove('hidden');
   if (state) state.menu = true;
@@ -3607,6 +3693,12 @@ overlay.addEventListener('click', ev => {
     showOverlay('menu');
     overlay.querySelector('.card').scrollTop = top;
   }
+  else if (b.dataset.act === 'lbsave') saveLeaderboardName();
+  else if (b.dataset.act === 'lbskip') {
+    state.lbPending = false; state.lbSkipped = true; saveGame();
+    if (overlayKind === 'name') hideOverlay(); else showOverlay(overlayKind);
+  }
+  else if (b.dataset.act === 'resume') hideOverlay();
   else if (b.dataset.act === 'load') {
     const d = loadSave();
     if (d) { restoreGame(d); hideOverlay(); showBanner(`<div class="big">Welcome back!</div><div>Round ${state.round + 1} is ready when you are.</div>`, 2.5); }
@@ -3624,6 +3716,7 @@ overlay.addEventListener('click', ev => {
   else if (b.dataset.act === 'continue') { hideOverlay(); showBanner(`<div class="big">Freeplay!</div><div>Go forever. After round ${DOUBLING_ROUND}, every round doubles in difficulty.</div>`, 3); refreshUI(true); }
 });
 
+overlay.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'lbName') { ev.preventDefault(); saveLeaderboardName(); } });
 $('btnStart').addEventListener('click', startWave);
 $('btnSpeed').addEventListener('click', cycleSpeed);
 $('btnPause').addEventListener('click', togglePause);
